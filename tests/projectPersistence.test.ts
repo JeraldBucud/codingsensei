@@ -224,6 +224,50 @@ describe("project persistence service", () => {
     expect(await service.loadFileKnowledge(root, "src/app.ts")).toBeUndefined();
   });
 
+
+  it("clears persisted file knowledge without removing the project catalog", async () => {
+    const memory = createMemoryAdapter();
+    const service = new ProjectPersistenceService(memory.adapter, {
+      createId: () => projectId,
+      now: () => new Date("2026-09-27T02:00:00.000Z")
+    });
+    const index = buildProjectIndex({
+      root,
+      sourceFiles: [{ relativePath: "src/app.ts" }],
+      metadataFiles: [{ relativePath: "package.json", content: "{}" }],
+      scanLimit: 2500,
+      scanTruncated: false
+    });
+    const analysis: LanguageAnalysis = {
+      status: "available",
+      file: "src/app.ts",
+      languageId: "typescript",
+      source: "deterministic",
+      symbols: [],
+      imports: [],
+      relationships: [],
+      entryPointSignals: [],
+      truncated: false
+    };
+
+    await service.saveProjectCatalog(root, index);
+    await service.saveFileKnowledge(
+      root,
+      {
+        fileName: "app.ts",
+        projectRelativePath: "src/app.ts",
+        languageId: "typescript",
+        text: "export const value = 1;"
+      },
+      analysis,
+      []
+    );
+
+    expect(await service.clearFileKnowledge(root)).toBe(true);
+    expect(await service.loadFileKnowledge(root, "src/app.ts")).toBeUndefined();
+    expect(await service.loadProjectCatalog(root)).toBeDefined();
+  });
+
   it("clears external project data without deleting the stable project identity", async () => {
     const memory = createMemoryAdapter();
     const service = new ProjectPersistenceService(memory.adapter, {
