@@ -546,7 +546,10 @@ export class CodingSenseiController implements vscode.Disposable {
     if (line !== undefined && line >= 0 && line < document.lineCount) {
       const position = new vscode.Position(line, 0);
       editor.selection = new vscode.Selection(position, position);
-      editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
+      editor.revealRange(
+        new vscode.Range(position, position),
+        vscode.TextEditorRevealType.InCenter
+      );
     }
   }
 
