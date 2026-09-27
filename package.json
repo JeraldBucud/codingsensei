@@ -40,7 +40,8 @@
     "onCommand:codingsensei.clearProjectIntelligence",
     "onCommand:codingsensei.showStructuralIntelligence",
     "onCommand:codingsensei.findRelevantProjectFiles",
-    "onCommand:codingsensei.buildStructuralIntelligence"
+    "onCommand:codingsensei.buildStructuralIntelligence",
+    "onCommand:codingsensei.showArchitectureInsights"
   ],
   "contributes": {
     "commands": [
@@ -95,6 +96,11 @@
       {
         "command": "codingsensei.buildStructuralIntelligence",
         "title": "CodingSensei: Build Deep Project Intelligence",
+        "category": "CodingSensei"
+      },
+      {
+        "command": "codingsensei.showArchitectureInsights",
+        "title": "CodingSensei: Show Architecture Insights",
         "category": "CodingSensei"
       }
     ],
