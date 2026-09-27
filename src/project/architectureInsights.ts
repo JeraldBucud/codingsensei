@@ -1,7 +1,6 @@
 import { dirname, fileName, normalizePath, withoutExtension } from "./pathUtils";
 import { isLikelyTestPath } from "./sourceTestRelations";
 import type {
-  StructuralEdge,
   StructuralEdgeType,
   StructuralFileNode,
   StructuralGraph
