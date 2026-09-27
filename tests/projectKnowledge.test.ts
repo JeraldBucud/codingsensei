@@ -73,6 +73,31 @@ describe("persistent file knowledge", () => {
     expect(projectKnowledgeKey("src/app.ts")).not.toBe(projectKnowledgeKey("src/other.ts"));
   });
 
+
+  it("rejects corrupted nested structural data", () => {
+    const knowledge = createPersistentFileKnowledge({
+      projectId: "2c0df18a-8ac2-4b68-84e3-0b6f2c3d6d41",
+      document: {
+        fileName: "app.ts",
+        relativePath: "src/app.ts",
+        languageId: "typescript",
+        text: "const value = 1;"
+      },
+      analysis,
+      frameworks,
+      now: () => new Date("2026-09-27T02:00:00.000Z")
+    });
+
+    expect(
+      parsePersistentFileKnowledge(
+        JSON.stringify({
+          ...knowledge,
+          symbols: [{ name: "broken", kind: "function", range: "not-a-range" }]
+        })
+      )
+    ).toBeUndefined();
+  });
+
   it("round-trips valid knowledge and rejects invalid schema versions", () => {
     const knowledge = createPersistentFileKnowledge({
       projectId: "2c0df18a-8ac2-4b68-84e3-0b6f2c3d6d41",
