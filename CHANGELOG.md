@@ -4,6 +4,10 @@ Notable CodingSensei changes are recorded here. CodingSensei follows Semantic Ve
 
 ## [Unreleased]
 
+Future changes will be recorded here.
+
+## [0.4.0] - 2026-09-27
+
 ### Persistent Project Intelligence
 
 - Added the Phase 3 project-identity foundation with a versioned `.codingsensei/project.json` file and stable UUID.
@@ -23,8 +27,6 @@ Notable CodingSensei changes are recorded here. CodingSensei follows Semantic Ve
 - Renamed the project from CodeShade to CodingSensei before VS Code Marketplace publication.
 - Updated the extension package name, command/view identifiers, local publisher placeholder, documentation, UI copy and development launch labels to the CodingSensei identity.
 - Added a dedicated brand-asset structure for GitHub, documentation, VS Code and social creatives.
-
-Future changes will be recorded here.
 
 ## [0.3.0] - 2026-09-26
 
