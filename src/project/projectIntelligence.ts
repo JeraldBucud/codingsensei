@@ -11,16 +11,10 @@ import { detectFrameworks } from "../framework/frameworkIntelligence";
 import type { FrameworkDetection } from "../framework/models";
 import { LanguageIntelligenceService } from "../language/languageIntelligence";
 import type { LanguageAnalysis, LanguageDocumentInput } from "../language/models";
-import {
-  analyzeArchitecture,
-  type ArchitectureInsights
-} from "./architectureInsights";
+import { analyzeArchitecture, type ArchitectureInsights } from "./architectureInsights";
 import { readGitState } from "./gitAdapter";
 import { ProjectIndexCache } from "./projectCache";
-import {
-  buildProjectEvidencePackage,
-  type ProjectEvidencePackage
-} from "./projectEvidence";
+import { buildProjectEvidencePackage, type ProjectEvidencePackage } from "./projectEvidence";
 import { createProjectCatalog, restoreProjectIndexFromCatalog } from "./projectCatalog";
 import { hashContent, restoreLanguageAnalysisFromKnowledge } from "./projectKnowledge";
 import type { ProjectPersistenceService } from "./projectPersistence";
