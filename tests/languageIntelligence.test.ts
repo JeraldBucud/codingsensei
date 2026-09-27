@@ -178,6 +178,28 @@ describe("language intelligence", () => {
     );
   });
 
+
+  it("detects JavaScript and TypeScript methods without treating ordinary calls as declarations", () => {
+    const structure = analyzeDeterministicStructure({
+      fileName: "UserService.ts",
+      languageId: "typescript",
+      text:
+        "class UserService {\n  loadUser() {\n    return validateUser();\n  }\n}\nfunction validateUser() { return true; }"
+    });
+
+    expect(structure.symbols).toContainEqual(
+      expect.objectContaining({ name: "loadUser", kind: "method" })
+    );
+    expect(structure.symbols.filter((symbol) => symbol.name === "validateUser")).toHaveLength(1);
+    expect(structure.relationships).toContainEqual(
+      expect.objectContaining({
+        type: "call",
+        target: "validateUser",
+        sourceSymbol: "loadUser"
+      })
+    );
+  });
+
   it("resolves Java service dependencies when one known local candidate exists", async () => {
     const service = new LanguageIntelligenceService();
     const analysis = await service.analyze(
