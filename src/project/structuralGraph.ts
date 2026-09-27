@@ -115,7 +115,6 @@ export function buildStructuralGraph(input: {
         reason: "The symbol is declared in this file."
       });
     }
-
   }
 
   for (const record of knowledgeByFile.values()) {
@@ -249,13 +248,12 @@ function addRelationshipEdge(
 
   const from =
     relationship.type === "call" && relationship.sourceSymbol
-      ? uniqueSymbolNodeId(sourceFile, relationship.sourceSymbol, symbolNodes) ??
-        fileNodeId(sourceFile)
+      ? (uniqueSymbolNodeId(sourceFile, relationship.sourceSymbol, symbolNodes) ??
+        fileNodeId(sourceFile))
       : fileNodeId(sourceFile);
   const to =
     relationship.type === "call" && relationship.symbol
-      ? uniqueSymbolNodeId(targetFile, relationship.symbol, symbolNodes) ??
-        fileNodeId(targetFile)
+      ? (uniqueSymbolNodeId(targetFile, relationship.symbol, symbolNodes) ?? fileNodeId(targetFile))
       : fileNodeId(targetFile);
   addEdge(edges, {
     id: edgeId(type, from, to),
