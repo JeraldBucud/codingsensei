@@ -8,6 +8,8 @@ import type { ProjectPersistenceAdapter } from "./projectPersistence";
 
 const projectManifestFileName = "project.json";
 const projectCatalogFileName = "catalog.json";
+const projectMetadataIgnoreFileName = ".gitignore";
+const projectMetadataIgnoreContents = "*\n";
 const projectKnowledgeDirectoryName = "knowledge";
 
 export function createVsCodeProjectPersistenceAdapter(
@@ -19,14 +21,19 @@ export function createVsCodeProjectPersistenceAdapter(
   return {
     readProjectIdentity: async (root) => readTextIfExists(projectIdentityUri(root), decoder),
     writeProjectIdentity: async (root, content) => {
-      const directory = vscode.Uri.joinPath(
-        vscode.Uri.parse(root.uri),
-        projectIdentityDirectoryName
-      );
+      const directory = projectIdentityDirectory(root);
       await vscode.workspace.fs.createDirectory(directory);
       await vscode.workspace.fs.writeFile(
         vscode.Uri.joinPath(directory, projectIdentityFileName),
         encoder.encode(content)
+      );
+    },
+    ensureProjectMetadataIgnored: async (root) => {
+      const directory = projectIdentityDirectory(root);
+      await vscode.workspace.fs.createDirectory(directory);
+      await vscode.workspace.fs.writeFile(
+        vscode.Uri.joinPath(directory, projectMetadataIgnoreFileName),
+        encoder.encode(projectMetadataIgnoreContents)
       );
     },
     writeProjectManifest: async (projectId, content) => {
@@ -100,12 +107,12 @@ async function deleteDirectoryIfExists(uri: vscode.Uri): Promise<void> {
   }
 }
 
+function projectIdentityDirectory(root: WorkspaceRoot): vscode.Uri {
+  return vscode.Uri.joinPath(vscode.Uri.parse(root.uri), projectIdentityDirectoryName);
+}
+
 function projectIdentityUri(root: WorkspaceRoot): vscode.Uri {
-  return vscode.Uri.joinPath(
-    vscode.Uri.parse(root.uri),
-    projectIdentityDirectoryName,
-    projectIdentityFileName
-  );
+  return vscode.Uri.joinPath(projectIdentityDirectory(root), projectIdentityFileName);
 }
 
 function projectStorageDirectory(globalStorageUri: vscode.Uri, projectId: string): vscode.Uri {
