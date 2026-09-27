@@ -158,8 +158,7 @@ describe("language intelligence", () => {
     const structure = analyzeDeterministicStructure({
       fileName: "auth.ts",
       languageId: "typescript",
-      text:
-        "function authenticate() {\n  validateUser();\n  userService.loadUser();\n}\n\nfunction validateUser() { return true; }"
+      text: "function authenticate() {\n  validateUser();\n  userService.loadUser();\n}\n\nfunction validateUser() { return true; }"
     });
 
     expect(structure.relationships).toContainEqual(
@@ -178,13 +177,11 @@ describe("language intelligence", () => {
     );
   });
 
-
   it("detects JavaScript and TypeScript methods without treating ordinary calls as declarations", () => {
     const structure = analyzeDeterministicStructure({
       fileName: "UserService.ts",
       languageId: "typescript",
-      text:
-        "class UserService {\n  loadUser() {\n    return validateUser();\n  }\n}\nfunction validateUser() { return true; }"
+      text: "class UserService {\n  loadUser() {\n    return validateUser();\n  }\n}\nfunction validateUser() { return true; }"
     });
 
     expect(structure.symbols).toContainEqual(
