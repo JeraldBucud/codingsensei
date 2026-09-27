@@ -103,9 +103,9 @@ describe("architecture insights", () => {
     expect(insights.files.find((item) => item.file === "src/main.ts")?.roles).toContain(
       "bootstrap"
     );
-    expect(
-      insights.files.find((item) => item.file === "src/routes/users.ts")?.roles
-    ).toContain("routing");
+    expect(insights.files.find((item) => item.file === "src/routes/users.ts")?.roles).toContain(
+      "routing"
+    );
     expect(
       insights.files.find((item) => item.file === "src/services/UserService.ts")?.roles
     ).toContain("service");
@@ -127,7 +127,6 @@ describe("architecture insights", () => {
     );
     expect(insights.entryFiles).toContain("src/main.ts");
   });
-
 
   it("prefers explicit feature-directory clusters when a project uses feature modules", () => {
     const featureGraph: StructuralGraph = {
@@ -200,10 +199,7 @@ describe("architecture insights", () => {
     expect(insights.clusters[0]).toMatchObject({
       label: "Auth feature",
       basis: "feature-directory",
-      files: [
-        "src/features/auth/Login.tsx",
-        "src/features/auth/authService.ts"
-      ]
+      files: ["src/features/auth/Login.tsx", "src/features/auth/authService.ts"]
     });
     expect(insights.clusters).toContainEqual(
       expect.objectContaining({
