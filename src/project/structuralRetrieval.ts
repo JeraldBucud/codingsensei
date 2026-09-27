@@ -143,6 +143,8 @@ function addScore(
 function edgeWeight(edge: StructuralEdge): number {
   const confidenceBonus = edge.confidence === "high" ? 2 : edge.confidence === "medium" ? 1 : 0;
   switch (edge.type) {
+    case "calls":
+      return 9 + confidenceBonus;
     case "imports":
     case "renders":
     case "service-dependency":
