@@ -128,6 +128,91 @@ describe("architecture insights", () => {
     expect(insights.entryFiles).toContain("src/main.ts");
   });
 
+
+  it("prefers explicit feature-directory clusters when a project uses feature modules", () => {
+    const featureGraph: StructuralGraph = {
+      ...graph,
+      totalFileCount: 4,
+      indexedFileCount: 4,
+      fileCount: 4,
+      symbolCount: 0,
+      relationshipCount: 2,
+      nodes: [
+        {
+          id: "file:src/features/auth/Login.tsx",
+          kind: "file",
+          file: "src/features/auth/Login.tsx",
+          frameworks: ["react"],
+          frameworkRoles: ["component"],
+          entryPointSignals: []
+        },
+        {
+          id: "file:src/features/auth/authService.ts",
+          kind: "file",
+          file: "src/features/auth/authService.ts",
+          frameworks: [],
+          frameworkRoles: ["service"],
+          entryPointSignals: []
+        },
+        {
+          id: "file:src/features/profile/Profile.tsx",
+          kind: "file",
+          file: "src/features/profile/Profile.tsx",
+          frameworks: ["react"],
+          frameworkRoles: ["component"],
+          entryPointSignals: []
+        },
+        {
+          id: "file:src/features/profile/profileService.ts",
+          kind: "file",
+          file: "src/features/profile/profileService.ts",
+          frameworks: [],
+          frameworkRoles: ["service"],
+          entryPointSignals: []
+        }
+      ],
+      edges: [
+        {
+          id: "imports:file:src/features/auth/Login.tsx->file:src/features/auth/authService.ts",
+          type: "imports",
+          from: "file:src/features/auth/Login.tsx",
+          to: "file:src/features/auth/authService.ts",
+          fromFile: "src/features/auth/Login.tsx",
+          toFile: "src/features/auth/authService.ts",
+          confidence: "high",
+          reason: "Auth component imports auth service."
+        },
+        {
+          id: "imports:file:src/features/profile/Profile.tsx->file:src/features/profile/profileService.ts",
+          type: "imports",
+          from: "file:src/features/profile/Profile.tsx",
+          to: "file:src/features/profile/profileService.ts",
+          fromFile: "src/features/profile/Profile.tsx",
+          toFile: "src/features/profile/profileService.ts",
+          confidence: "high",
+          reason: "Profile component imports profile service."
+        }
+      ]
+    };
+
+    const insights = analyzeArchitecture(featureGraph);
+
+    expect(insights.clusters[0]).toMatchObject({
+      label: "Auth feature",
+      basis: "feature-directory",
+      files: [
+        "src/features/auth/Login.tsx",
+        "src/features/auth/authService.ts"
+      ]
+    });
+    expect(insights.clusters).toContainEqual(
+      expect.objectContaining({
+        label: "Profile feature",
+        basis: "feature-directory"
+      })
+    );
+  });
+
   it("summarizes structural edge types and architecture role counts", () => {
     const insights = analyzeArchitecture(graph);
 
