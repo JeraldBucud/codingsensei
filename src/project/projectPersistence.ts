@@ -41,6 +41,7 @@ export interface ProjectPersistenceAdapter {
     content: string
   ) => Promise<void>;
   readonly deleteProjectKnowledge: (projectId: string, knowledgeKey: string) => Promise<void>;
+  readonly deleteAllProjectKnowledge: (projectId: string) => Promise<void>;
   readonly deleteProjectStorage: (projectId: string) => Promise<void>;
 }
 
@@ -184,6 +185,20 @@ export class ProjectPersistenceService {
 
     try {
       await this.adapter.deleteProjectKnowledge(state.projectId, projectKnowledgeKey(relativePath));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async clearFileKnowledge(root: WorkspaceRoot): Promise<boolean> {
+    const state = await this.ensureProject(root);
+    if (state.status !== "ready" || !state.projectId) {
+      return false;
+    }
+
+    try {
+      await this.adapter.deleteAllProjectKnowledge(state.projectId);
       return true;
     } catch {
       return false;
