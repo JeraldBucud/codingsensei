@@ -219,7 +219,6 @@ function createMemoryPersistenceService(
   });
 }
 
-
 function createWritablePersistenceService(
   root: WorkspaceRoot,
   sourceFiles: readonly string[]
@@ -444,7 +443,6 @@ describe("project intelligence service", () => {
     expect(analysis.snapshot?.sourceFileCount).toBe(2);
     expect(analysis.snapshot?.testFileCount).toBe(1);
   });
-
 
   it("deep indexes project files, builds a graph and reuses unchanged knowledge", async () => {
     const memory = createMemoryAdapter({
