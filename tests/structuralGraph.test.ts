@@ -131,6 +131,49 @@ describe("structural graph", () => {
   });
 
 
+
+  it("does not infer a cross-file call from a matching symbol name without dependency evidence", () => {
+    const graph = buildStructuralGraph({
+      catalog,
+      knowledge: [
+        knowledge({
+          file: "src/App.tsx",
+          symbols: [
+            {
+              name: "App",
+              kind: "function",
+              range: { startLine: 0, startCharacter: 0, endLine: 2, endCharacter: 1 },
+              selectionRange: { startLine: 0, startCharacter: 9, endLine: 0, endCharacter: 12 }
+            }
+          ],
+          relationships: [
+            {
+              type: "call",
+              target: "UserService",
+              symbol: "UserService",
+              sourceSymbol: "App",
+              confidence: "medium",
+              reason: "App calls UserService."
+            }
+          ]
+        }),
+        knowledge({
+          file: "src/UserService.ts",
+          symbols: [
+            {
+              name: "UserService",
+              kind: "class",
+              range: { startLine: 0, startCharacter: 0, endLine: 5, endCharacter: 1 },
+              selectionRange: { startLine: 0, startCharacter: 6, endLine: 0, endCharacter: 17 }
+            }
+          ]
+        })
+      ]
+    });
+
+    expect(graph.edges.some((edge) => edge.type === "calls")).toBe(false);
+  });
+
   it("keeps intra-file calls as symbol-to-symbol call graph edges", () => {
     const graph = buildStructuralGraph({
       catalog: {
