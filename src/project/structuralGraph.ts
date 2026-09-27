@@ -1,3 +1,4 @@
+import type { FrameworkDetection } from "../framework/models";
 import type { LanguageRelationship, LanguageSymbol } from "../language/models";
 import type { PersistentProjectCatalog } from "./projectCatalog";
 import type { PersistentFileKnowledge } from "./projectKnowledge";
@@ -19,6 +20,10 @@ export interface StructuralFileNode {
   readonly id: string;
   readonly kind: "file";
   readonly file: string;
+  readonly languageId?: string;
+  readonly frameworks: readonly FrameworkDetection["framework"][];
+  readonly frameworkRoles: readonly FrameworkDetection["roles"][number][];
+  readonly entryPointSignals: readonly string[];
 }
 
 export interface StructuralSymbolNode {
@@ -61,21 +66,32 @@ export function buildStructuralGraph(input: {
 }): StructuralGraph {
   const codeFiles = [...new Set(input.catalog.codeFiles.map(normalizePath))].sort();
   const knownFiles = new Set(codeFiles);
-  const nodes: StructuralNode[] = codeFiles.map((file) => ({
-    id: fileNodeId(file),
-    kind: "file",
-    file
-  }));
-  const edges = new Map<string, StructuralEdge>();
-  const indexedFiles = new Set<string>();
-  const symbolOwners = new Map<string, Set<string>>();
-
+  const knowledgeByFile = new Map<string, PersistentFileKnowledge>();
   for (const record of input.knowledge) {
     const file = normalizePath(record.relativePath);
-    if (!knownFiles.has(file)) {
-      continue;
+    if (knownFiles.has(file) && !knowledgeByFile.has(file)) {
+      knowledgeByFile.set(file, record);
     }
-    indexedFiles.add(file);
+  }
+
+  const nodes: StructuralNode[] = codeFiles.map((file) => {
+    const record = knowledgeByFile.get(file);
+    return {
+      id: fileNodeId(file),
+      kind: "file",
+      file,
+      languageId: record?.languageId,
+      frameworks: unique(record?.frameworks.map((framework) => framework.framework) ?? []),
+      frameworkRoles: unique(record?.frameworks.flatMap((framework) => framework.roles) ?? []),
+      entryPointSignals: [...(record?.entryPointSignals ?? [])]
+    };
+  });
+  const edges = new Map<string, StructuralEdge>();
+  const indexedFiles = new Set(knowledgeByFile.keys());
+  const symbolOwners = new Map<string, Set<string>>();
+
+  for (const record of knowledgeByFile.values()) {
+    const file = normalizePath(record.relativePath);
 
     for (const symbol of record.symbols) {
       const node = toSymbolNode(file, symbol);
@@ -96,11 +112,8 @@ export function buildStructuralGraph(input: {
 
   }
 
-  for (const record of input.knowledge) {
+  for (const record of knowledgeByFile.values()) {
     const file = normalizePath(record.relativePath);
-    if (!knownFiles.has(file)) {
-      continue;
-    }
     for (const relationship of [...record.imports, ...record.relationships]) {
       addRelationshipEdge(edges, relationship, file, knownFiles, symbolOwners);
     }
@@ -260,6 +273,10 @@ function addEdge(edges: Map<string, StructuralEdge>, edge: StructuralEdge): void
 
 function edgeId(type: StructuralEdgeType, from: string, to: string): string {
   return `${type}:${from}->${to}`;
+}
+
+function unique<T>(values: readonly T[]): readonly T[] {
+  return [...new Set(values)];
 }
 
 function compareNodes(a: StructuralNode, b: StructuralNode): number {
