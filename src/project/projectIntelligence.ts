@@ -7,14 +7,16 @@ import type {
   ProjectPersistenceSummary,
   WorkspaceRoot
 } from "../core/models";
+import { detectFrameworks } from "../framework/frameworkIntelligence";
 import type { FrameworkDetection } from "../framework/models";
+import { LanguageIntelligenceService } from "../language/languageIntelligence";
 import type { LanguageAnalysis, LanguageDocumentInput } from "../language/models";
 import { readGitState } from "./gitAdapter";
 import { ProjectIndexCache } from "./projectCache";
 import { restoreProjectIndexFromCatalog } from "./projectCatalog";
 import { hashContent, restoreLanguageAnalysisFromKnowledge } from "./projectKnowledge";
 import type { ProjectPersistenceService } from "./projectPersistence";
-import { dirname, normalizePath } from "./pathUtils";
+import { dirname, extension, fileName, normalizePath } from "./pathUtils";
 import {
   isPathInsideProject,
   isStrongProjectMarker,
@@ -36,6 +38,7 @@ import {
 
 const scanLimit = 2500;
 const metadataReadLimitBytes = 128 * 1024;
+const backgroundSourceReadLimitBytes = 256 * 1024;
 const sourceIncludePattern = "**/*.{ts,tsx,js,jsx,mts,cts,mjs,cjs,py,java}";
 const excludePattern =
   "**/{.git,node_modules,dist,build,out,target,coverage,.next,.venv,venv,__pycache__,vendor,generated}/**";
@@ -53,6 +56,10 @@ export interface ProjectWorkspaceAdapter {
     limit: number
   ) => Promise<readonly ProjectFileRecord[]>;
   readonly findMetadataFiles: (root: WorkspaceRoot) => Promise<readonly ProjectFileRecord[]>;
+  readonly readSourceDocument?: (
+    root: WorkspaceRoot,
+    relativePath: string
+  ) => Promise<Pick<LanguageDocumentInput, "uri" | "fileName" | "languageId" | "text"> | undefined>;
   readonly readGitState: (root: WorkspaceRoot, activeFile?: string) => Promise<GitProjectState>;
 }
 
@@ -64,6 +71,7 @@ export interface RestoredLanguageKnowledge {
 export class ProjectIntelligenceService {
   private readonly cache = new ProjectIndexCache();
   private readonly adapter: ProjectWorkspaceAdapter;
+  private readonly backgroundLanguageService = new LanguageIntelligenceService();
   private gitCache = new Map<string, GitProjectState>();
   private gitGenerations = new Map<string, number>();
   private persistenceState = new Map<string, ProjectPersistenceSummary>();
@@ -191,6 +199,46 @@ export class ProjectIntelligenceService {
         roles: [...framework.roles]
       }))
     };
+  }
+
+  async indexSourceFile(uri: vscode.Uri): Promise<boolean> {
+    if (!this.persistenceService || !this.adapter.readSourceDocument) {
+      return false;
+    }
+
+    const resolution = await this.adapter.resolveProjectRootForUri(uri);
+    if (!resolution?.activeFile) {
+      return false;
+    }
+
+    const root = resolution.projectRoot;
+    await this.ensurePersistence(root);
+    const source = await this.adapter.readSourceDocument(root, resolution.activeFile);
+    if (!source) {
+      return false;
+    }
+
+    const cached = this.cache.get(root.uri);
+    const document: LanguageDocumentInput = {
+      ...source,
+      relativePath: resolution.activeFile,
+      projectRootUri: root.uri,
+      projectRelativePath: resolution.activeFile,
+      knownProjectFiles: cached?.index.codeFiles,
+      version: 0
+    };
+    const analysis = await this.backgroundLanguageService.analyze(document, true);
+    const frameworks = detectFrameworks({
+      fileName: document.fileName,
+      relativePath: document.relativePath,
+      languageId: document.languageId,
+      text: document.text,
+      languageAnalysis: analysis,
+      manifestFiles: cached?.index.manifestFiles,
+      metadataPackageNames: cached?.index.metadata.packageNames
+    });
+
+    return this.persistenceService.saveFileKnowledge(root, document, analysis, frameworks);
   }
 
   async saveLanguageKnowledge(
@@ -406,6 +454,7 @@ function createVsCodeProjectAdapter(): ProjectWorkspaceAdapter {
     resolveProjectRootForUri,
     findSourceFiles: findSourceFilesForRoot,
     findMetadataFiles: findMetadataFilesForRoot,
+    readSourceDocument: readSourceDocumentForRoot,
     readGitState: async (root, activeFile) =>
       root.uri.startsWith("file:")
         ? readGitState({ rootPath: vscode.Uri.parse(root.uri).fsPath, activeFile })
@@ -432,6 +481,56 @@ async function findSourceFilesForRoot(
     .map((uri) => uriRelativePath(uri, folderUri))
     .filter((path) => !isIgnoredProjectPath(path))
     .map((relativePath) => ({ relativePath }));
+}
+
+async function readSourceDocumentForRoot(
+  root: WorkspaceRoot,
+  relativePath: string
+): Promise<Pick<LanguageDocumentInput, "uri" | "fileName" | "languageId" | "text"> | undefined> {
+  const languageId = languageIdForSourcePath(relativePath);
+  if (!languageId) {
+    return undefined;
+  }
+
+  const uri = vscode.Uri.joinPath(vscode.Uri.parse(root.uri), ...relativePath.split("/"));
+  try {
+    const stat = await vscode.workspace.fs.stat(uri);
+    if (stat.type === vscode.FileType.Directory || stat.size > backgroundSourceReadLimitBytes) {
+      return undefined;
+    }
+    const text = new TextDecoder().decode(await vscode.workspace.fs.readFile(uri));
+    return {
+      uri: uri.toString(),
+      fileName: fileName(relativePath),
+      languageId,
+      text
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+function languageIdForSourcePath(relativePath: string): string | undefined {
+  switch (extension(relativePath)) {
+    case ".ts":
+    case ".mts":
+    case ".cts":
+      return "typescript";
+    case ".tsx":
+      return "typescriptreact";
+    case ".js":
+    case ".mjs":
+    case ".cjs":
+      return "javascript";
+    case ".jsx":
+      return "javascriptreact";
+    case ".py":
+      return "python";
+    case ".java":
+      return "java";
+    default:
+      return undefined;
+  }
 }
 
 async function findMetadataFilesForRoot(
