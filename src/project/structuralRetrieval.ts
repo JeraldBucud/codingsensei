@@ -1,9 +1,8 @@
 import { fileName, normalizePath } from "./pathUtils";
-import {
-  fileNodeId,
-  type StructuralEdge,
-  type StructuralGraph,
-  type StructuralSymbolNode
+import type {
+  StructuralEdge,
+  StructuralGraph,
+  StructuralSymbolNode
 } from "./structuralGraph";
 
 export interface StructuralRetrievalItem {
@@ -72,15 +71,14 @@ function scoreStructuralNeighbors(
   activeFile: string,
   scores: Map<string, MutableRetrievalScore>
 ): void {
-  const activeNode = fileNodeId(activeFile);
   for (const edge of graph.edges) {
     if (!edge.toFile || edge.type === "contains") {
       continue;
     }
 
-    if (edge.from === activeNode) {
+    if (edge.fromFile === activeFile) {
       addScore(scores, edge.toFile, edgeWeight(edge), relationshipReason(edge, "outgoing"));
-    } else if (edge.to === activeNode) {
+    } else if (edge.toFile === activeFile) {
       addScore(
         scores,
         edge.fromFile,
