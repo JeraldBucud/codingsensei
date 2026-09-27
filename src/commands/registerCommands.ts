@@ -18,11 +18,13 @@ import { isPathInsideProject, stripProjectPrefix } from "../project/projectRootR
 import { isIgnoredProjectPath } from "../project/projectScanner";
 import { LearningModeViewProvider } from "../ui/learningModeView";
 import { DebouncedAction } from "../utils/debouncedAction";
+import { IdleWorkQueue } from "../utils/idleWorkQueue";
 
 type RefreshMode = "fast" | "ensure-project" | "refresh-git" | "force-project";
 
 export class CodingSenseiController implements vscode.Disposable {
   private static readonly languageDebounceMs = 350;
+  private static readonly backgroundIndexIdleMs = 1200;
   private readonly disposables: vscode.Disposable[] = [];
   private currentContext: LearningContext | undefined;
   private hintSession: HintSession | undefined;
@@ -38,6 +40,7 @@ export class CodingSenseiController implements vscode.Disposable {
       void this.refreshLanguage(false);
     }
   );
+  private readonly backgroundIndexQueue: IdleWorkQueue<vscode.Uri>;
 
   constructor(
     private readonly contextService: WorkspaceContextService,
@@ -45,7 +48,15 @@ export class CodingSenseiController implements vscode.Disposable {
     private readonly hintEngine: ProgressiveHintEngine,
     private readonly nextStepService: NextStepService,
     private readonly viewProvider: LearningModeViewProvider
-  ) {}
+  ) {
+    this.backgroundIndexQueue = new IdleWorkQueue(
+      CodingSenseiController.backgroundIndexIdleMs,
+      (uri) => uri.toString(),
+      async (uri) => {
+        await this.projectService.indexSourceFile(uri);
+      }
+    );
+  }
 
   register(context: vscode.ExtensionContext): void {
     const projectMetadataWatcher = vscode.workspace.createFileSystemWatcher(
@@ -95,6 +106,7 @@ export class CodingSenseiController implements vscode.Disposable {
       }),
       vscode.workspace.onDidChangeTextDocument((event) => {
         if (isActiveDocument(event.document)) {
+          this.backgroundIndexQueue.defer();
           this.refresh("fast");
           this.scheduleLanguageRefresh();
         }
@@ -139,6 +151,7 @@ export class CodingSenseiController implements vscode.Disposable {
 
   dispose(): void {
     this.debouncedLanguageRefresh.cancel();
+    this.backgroundIndexQueue.dispose();
     for (const disposable of this.disposables) {
       disposable.dispose();
     }
@@ -349,6 +362,10 @@ export class CodingSenseiController implements vscode.Disposable {
     }
 
     const changedRoot = await this.projectService.updateSourceFile(uri, change);
+    if (change !== "delete") {
+      this.backgroundIndexQueue.enqueue(uri);
+    }
+
     const activeRoot =
       this.projectAnalysis?.root ?? this.currentContext?.workspace.activeWorkspaceRoot;
     const activeFile = this.currentContext?.activeEditor?.relativePath;
