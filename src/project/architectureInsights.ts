@@ -26,6 +26,7 @@ export interface ArchitectureFileInsight {
 export interface ArchitectureCluster {
   readonly id: string;
   readonly label: string;
+  readonly basis: "connectivity" | "feature-directory";
   readonly files: readonly string[];
   readonly roles: readonly ArchitectureRole[];
   readonly frameworks: readonly string[];
@@ -84,16 +85,26 @@ export function analyzeArchitecture(graph: StructuralGraph): ArchitectureInsight
     }
   }
 
-  const clusters = connectedComponents(fileNodes.map((node) => node.file), adjacency)
-    .map((clusterFiles, index) =>
-      buildCluster(index, clusterFiles, fileInsightByPath)
+  const connectivityClusters = connectedComponents(
+    fileNodes.map((node) => node.file),
+    adjacency
+  ).map((clusterFiles, index) =>
+    buildCluster(
+      `connectivity-${String(index + 1)}`,
+      clusterLabel(clusterFiles, collectRoles(clusterFiles, fileInsightByPath)),
+      "connectivity",
+      clusterFiles,
+      fileInsightByPath
     )
-    .sort(
-      (a, b) =>
-        b.files.length - a.files.length ||
-        a.label.localeCompare(b.label) ||
-        a.id.localeCompare(b.id)
-    );
+  );
+  const featureClusters = buildFeatureDirectoryClusters(files, fileInsightByPath);
+  const clusters = dedupeClusters([...featureClusters, ...connectivityClusters]).sort(
+    (a, b) =>
+      clusterBasisRank(a.basis) - clusterBasisRank(b.basis) ||
+      b.files.length - a.files.length ||
+      a.label.localeCompare(b.label) ||
+      a.id.localeCompare(b.id)
+  );
 
   const entryFiles = files
     .filter(
@@ -210,30 +221,124 @@ function connectedComponents(
 }
 
 function buildCluster(
-  index: number,
+  id: string,
+  label: string,
+  basis: ArchitectureCluster["basis"],
   files: readonly string[],
   insightByFile: ReadonlyMap<string, ArchitectureFileInsight>
 ): ArchitectureCluster {
-  const roles = new Set<ArchitectureRole>();
-  const frameworks = new Set<string>();
-
-  for (const file of files) {
-    const insight = insightByFile.get(file);
-    for (const role of insight?.roles ?? []) {
-      roles.add(role);
-    }
-    for (const framework of insight?.frameworks ?? []) {
-      frameworks.add(framework);
-    }
-  }
+  const roles = collectRoles(files, insightByFile);
+  const frameworks = collectFrameworks(files, insightByFile);
 
   return {
-    id: `cluster-${String(index + 1)}`,
-    label: clusterLabel(files, [...roles]),
-    files: [...files],
+    id,
+    label,
+    basis,
+    files: [...files].sort(),
     roles: [...roles].sort(roleRank),
     frameworks: [...frameworks].sort()
   };
+}
+
+function buildFeatureDirectoryClusters(
+  files: readonly ArchitectureFileInsight[],
+  insightByFile: ReadonlyMap<string, ArchitectureFileInsight>
+): readonly ArchitectureCluster[] {
+  const groups = new Map<
+    string,
+    { readonly label: string; readonly files: string[] }
+  >();
+
+  for (const insight of files) {
+    const feature = featureDirectory(insight.file);
+    if (!feature) {
+      continue;
+    }
+    const group = groups.get(feature.key) ?? { label: feature.label, files: [] };
+    group.files.push(insight.file);
+    groups.set(feature.key, group);
+  }
+
+  return [...groups.entries()]
+    .filter(([, group]) => group.files.length >= 2)
+    .map(([key, group]) =>
+      buildCluster(
+        `feature-${key.replaceAll("/", "-")}`,
+        group.label,
+        "feature-directory",
+        group.files,
+        insightByFile
+      )
+    );
+}
+
+function featureDirectory(
+  file: string
+): { readonly key: string; readonly label: string } | undefined {
+  const parts = normalizePath(file).split("/").filter(Boolean);
+  const markers = new Map([
+    ["features", "feature"],
+    ["feature", "feature"],
+    ["modules", "module"],
+    ["domains", "domain"],
+    ["domain", "domain"],
+    ["packages", "package"]
+  ]);
+
+  for (let index = 0; index < parts.length - 1; index += 1) {
+    const marker = parts[index]?.toLowerCase();
+    const suffix = marker ? markers.get(marker) : undefined;
+    const name = parts[index + 1];
+    if (marker && suffix && name) {
+      return {
+        key: `${marker}/${name.toLowerCase()}`,
+        label: `${humanize(name)} ${suffix}`
+      };
+    }
+  }
+  return undefined;
+}
+
+function collectRoles(
+  files: readonly string[],
+  insightByFile: ReadonlyMap<string, ArchitectureFileInsight>
+): Set<ArchitectureRole> {
+  const roles = new Set<ArchitectureRole>();
+  for (const file of files) {
+    for (const role of insightByFile.get(file)?.roles ?? []) {
+      roles.add(role);
+    }
+  }
+  return roles;
+}
+
+function collectFrameworks(
+  files: readonly string[],
+  insightByFile: ReadonlyMap<string, ArchitectureFileInsight>
+): Set<string> {
+  const frameworks = new Set<string>();
+  for (const file of files) {
+    for (const framework of insightByFile.get(file)?.frameworks ?? []) {
+      frameworks.add(framework);
+    }
+  }
+  return frameworks;
+}
+
+function dedupeClusters(clusters: readonly ArchitectureCluster[]): readonly ArchitectureCluster[] {
+  const seen = new Set<string>();
+  return clusters.filter((cluster) => {
+    const key = [...cluster.files].sort().join("\u0000");
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+}
+
+function clusterBasisRank(basis: ArchitectureCluster["basis"]): number {
+  return basis === "feature-directory" ? 0 : 1;
 }
 
 function clusterLabel(files: readonly string[], roles: readonly ArchitectureRole[]): string {
