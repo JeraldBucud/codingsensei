@@ -20,6 +20,10 @@ Complete. Added native-first active-file symbol awareness, bounded definition/re
 
 Complete. Added a versioned stable project identity in `.codingsensei/project.json`, self-ignored local metadata, project-specific VS Code extension storage, persistent structural catalogs, persistent per-file structural knowledge, restart restoration with content-hash validation, incremental create/change/delete maintenance, metadata-aware invalidation, idle changed-file re-indexing, and inspect/rebuild/clear management commands. Manual Windows Extension Development Host validation confirmed stable project identity across rebuild, clear and restart without dirtying the user's Git working tree.
 
+### Phase 4 — Deep Structural Intelligence & Retrieval (`0.5.0`)
+
+In progress. The first checkpoint adds a deterministic project graph over persistent local knowledge, bounded deep indexing, relationship-aware relevant-file retrieval, and VS Code commands for building, inspecting and querying that structural intelligence. Later checkpoints will deepen call/dependency relationships, architecture grouping and evidence packages for Project Chat and Assist Mode.
+
 ---
 
 # V1 Target Scope
