@@ -1,11 +1,7 @@
 import { analyzeArchitecture, type ArchitectureRole } from "./architectureInsights";
 import { normalizePath } from "./pathUtils";
 import { retrieveStructuralContext } from "./structuralRetrieval";
-import type {
-  StructuralEdgeType,
-  StructuralGraph,
-  StructuralSymbolNode
-} from "./structuralGraph";
+import type { StructuralEdgeType, StructuralGraph, StructuralSymbolNode } from "./structuralGraph";
 
 export interface ProjectEvidenceFile {
   readonly file: string;
@@ -57,9 +53,7 @@ export function buildProjectEvidencePackage(input: {
     limit: input.limit ?? 8
   });
   const architecture = analyzeArchitecture(input.graph);
-  const architectureByFile = new Map(
-    architecture.files.map((insight) => [insight.file, insight])
-  );
+  const architectureByFile = new Map(architecture.files.map((insight) => [insight.file, insight]));
 
   const files = results.map((result): ProjectEvidenceFile => {
     const architectureInsight = architectureByFile.get(result.file);
@@ -93,10 +87,7 @@ export function buildProjectEvidencePackage(input: {
       kind: node.symbolKind
     }))
     .sort(
-      (a, b) =>
-        a.file.localeCompare(b.file) ||
-        a.line - b.line ||
-        a.name.localeCompare(b.name)
+      (a, b) => a.file.localeCompare(b.file) || a.line - b.line || a.name.localeCompare(b.name)
     );
 
   const relationships = input.graph.edges
@@ -107,15 +98,13 @@ export function buildProjectEvidencePackage(input: {
         selectedFiles.has(edge.fromFile) &&
         selectedFiles.has(edge.toFile)
     )
-    .map(
-      (edge): ProjectEvidenceRelationship => ({
-        type: edge.type,
-        fromFile: edge.fromFile,
-        toFile: edge.toFile!,
-        confidence: edge.confidence,
-        reason: edge.reason
-      })
-    )
+    .map((edge): ProjectEvidenceRelationship => ({
+      type: edge.type,
+      fromFile: edge.fromFile,
+      toFile: edge.toFile!,
+      confidence: edge.confidence,
+      reason: edge.reason
+    }))
     .sort(
       (a, b) =>
         a.fromFile.localeCompare(b.fromFile) ||
