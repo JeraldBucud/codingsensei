@@ -18,7 +18,7 @@ Complete. Added native-first active-file symbol awareness, bounded definition/re
 
 ### Phase 3 — Persistent Project Intelligence (`0.4.0`)
 
-In progress. Completed foundations now include a versioned stable project identity in `.codingsensei/project.json`, project-specific local extension storage, a persistent structural project catalog, incremental source create/delete updates, and inspect/rebuild/clear management commands. Remaining Phase 3 work deepens changed-file metadata, persistent symbol/relationship records and background/idle indexing.
+Complete. Added a versioned stable project identity in `.codingsensei/project.json`, self-ignored local metadata, project-specific VS Code extension storage, persistent structural catalogs, persistent per-file structural knowledge, restart restoration with content-hash validation, incremental create/change/delete maintenance, metadata-aware invalidation, idle changed-file re-indexing, and inspect/rebuild/clear management commands. Manual Windows Extension Development Host validation confirmed stable project identity across rebuild, clear and restart without dirtying the user's Git working tree.
 
 ---
 
