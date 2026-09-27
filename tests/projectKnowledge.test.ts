@@ -73,7 +73,6 @@ describe("persistent file knowledge", () => {
     expect(projectKnowledgeKey("src/app.ts")).not.toBe(projectKnowledgeKey("src/other.ts"));
   });
 
-
   it("rejects corrupted nested structural data", () => {
     const knowledge = createPersistentFileKnowledge({
       projectId: "2c0df18a-8ac2-4b68-84e3-0b6f2c3d6d41",
