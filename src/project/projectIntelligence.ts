@@ -12,10 +12,7 @@ import type { LanguageAnalysis, LanguageDocumentInput } from "../language/models
 import { readGitState } from "./gitAdapter";
 import { ProjectIndexCache } from "./projectCache";
 import { restoreProjectIndexFromCatalog } from "./projectCatalog";
-import {
-  hashContent,
-  restoreLanguageAnalysisFromKnowledge
-} from "./projectKnowledge";
+import { hashContent, restoreLanguageAnalysisFromKnowledge } from "./projectKnowledge";
 import type { ProjectPersistenceService } from "./projectPersistence";
 import { dirname, normalizePath } from "./pathUtils";
 import {
@@ -176,8 +173,7 @@ export class ProjectIntelligenceService {
       return undefined;
     }
 
-    const relativePath =
-      document.projectRelativePath ?? document.relativePath ?? document.fileName;
+    const relativePath = document.projectRelativePath ?? document.relativePath ?? document.fileName;
     const knowledge = await this.persistenceService.loadFileKnowledge(root, relativePath);
     if (
       !knowledge ||
