@@ -17,6 +17,10 @@ import {
 } from "./architectureInsights";
 import { readGitState } from "./gitAdapter";
 import { ProjectIndexCache } from "./projectCache";
+import {
+  buildProjectEvidencePackage,
+  type ProjectEvidencePackage
+} from "./projectEvidence";
 import { createProjectCatalog, restoreProjectIndexFromCatalog } from "./projectCatalog";
 import { hashContent, restoreLanguageAnalysisFromKnowledge } from "./projectKnowledge";
 import type { ProjectPersistenceService } from "./projectPersistence";
@@ -462,6 +466,29 @@ export class ProjectIntelligenceService {
   ): Promise<ArchitectureInsights | undefined> {
     const graph = await this.getStructuralGraph(activeEditor);
     return graph ? analyzeArchitecture(graph) : undefined;
+  }
+
+  async buildProjectEvidence(
+    activeEditor: ActiveEditorContext | undefined,
+    query: string,
+    limit = 8
+  ): Promise<ProjectEvidencePackage | undefined> {
+    const resolution = await this.adapter.resolveProjectRoot(activeEditor);
+    if (!resolution) {
+      return undefined;
+    }
+
+    const graph = await this.getStructuralGraph(activeEditor);
+    if (!graph) {
+      return undefined;
+    }
+
+    return buildProjectEvidencePackage({
+      graph,
+      activeFile: resolution.activeFile,
+      query,
+      limit
+    });
   }
 
   async retrieveStructuralContext(
