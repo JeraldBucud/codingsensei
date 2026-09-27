@@ -172,7 +172,8 @@ describe("language intelligence", () => {
       expect.objectContaining({
         type: "call",
         target: "loadUser",
-        sourceSymbol: "authenticate"
+        sourceSymbol: "authenticate",
+        qualifier: "userService"
       })
     );
   });
