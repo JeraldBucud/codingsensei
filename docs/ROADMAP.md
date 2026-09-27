@@ -22,7 +22,7 @@ Complete. Added a versioned stable project identity in `.codingsensei/project.js
 
 ### Phase 4 — Deep Structural Intelligence & Retrieval (`0.5.0`)
 
-In progress. The first checkpoint adds a deterministic project graph over persistent local knowledge, bounded deep indexing, relationship-aware relevant-file retrieval, and VS Code commands for building, inspecting and querying that structural intelligence. Later checkpoints will deepen call/dependency relationships, architecture grouping and evidence packages for Project Chat and Assist Mode.
+In progress. Current work includes a deterministic project graph over persistent local knowledge, bounded deep indexing, file- and symbol-level dependency/call relationships, architecture roles and connected structural clusters, relationship-aware relevant-file retrieval, clickable symbol-line evidence and bounded evidence packages for future Project Chat and Assist Mode. Remaining work is focused on correctness hardening, real-project validation and final Phase 4 integration rather than introducing an LLM into project discovery.
 
 ---
 
