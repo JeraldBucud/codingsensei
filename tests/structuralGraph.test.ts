@@ -114,7 +114,9 @@ describe("structural graph", () => {
         (edge) =>
           edge.type === "calls" &&
           edge.fromFile === "src/App.tsx" &&
-          edge.toFile === "src/UserService.ts"
+          edge.toFile === "src/UserService.ts" &&
+          edge.from.startsWith("symbol:src/App.tsx:") &&
+          edge.to.startsWith("symbol:src/UserService.ts:")
       )
     ).toBe(true);
     expect(
