@@ -228,6 +228,7 @@ function addRelationshipEdge(
       ? callTargetFile(
           relationship.symbol,
           sourceFile,
+          relationship.qualifier,
           symbolOwners,
           symbolNodes,
           directTargetsBySource.get(sourceFile) ?? new Set<string>()
@@ -291,17 +292,41 @@ function edgeTypeForRelationship(
 function callTargetFile(
   symbol: string,
   sourceFile: string,
+  qualifier: string | undefined,
   symbolOwners: ReadonlyMap<string, ReadonlySet<string>>,
   symbolNodes: ReadonlyMap<string, readonly StructuralSymbolNode[]>,
   allowedCrossFileTargets: ReadonlySet<string>
 ): string | undefined {
-  const localMatches = symbolNodes.get(fileSymbolKey(sourceFile, symbol)) ?? [];
-  if (localMatches.length === 1) {
-    return sourceFile;
+  const localQualifier =
+    qualifier === undefined || qualifier === "this" || qualifier === "self" || qualifier === "super";
+  if (localQualifier) {
+    const localMatches = symbolNodes.get(fileSymbolKey(sourceFile, symbol)) ?? [];
+    if (localMatches.length === 1) {
+      return sourceFile;
+    }
   }
+
+  if (qualifier && builtInCallQualifiers.has(qualifier)) {
+    return undefined;
+  }
+
   const owner = uniqueSymbolOwner(symbol, sourceFile, symbolOwners);
   return owner && allowedCrossFileTargets.has(owner) ? owner : undefined;
 }
+
+const builtInCallQualifiers = new Set([
+  "console",
+  "Math",
+  "JSON",
+  "Object",
+  "Array",
+  "String",
+  "Number",
+  "Boolean",
+  "Promise",
+  "Date",
+  "RegExp"
+]);
 
 function collectDirectFileTargets(
   knowledgeByFile: ReadonlyMap<string, PersistentFileKnowledge>,
