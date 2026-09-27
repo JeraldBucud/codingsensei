@@ -185,6 +185,7 @@ function isLanguageRelationships(value: unknown): value is LanguageRelationship[
     "import",
     "definition",
     "reference",
+    "call",
     "contains",
     "renders",
     "route-handler",
@@ -201,6 +202,7 @@ function isLanguageRelationships(value: unknown): value is LanguageRelationship[
         typeof item.target === "string" &&
         (item.targetFile === undefined || typeof item.targetFile === "string") &&
         (item.symbol === undefined || typeof item.symbol === "string") &&
+        (item.sourceSymbol === undefined || typeof item.sourceSymbol === "string") &&
         (item.providerDerived === undefined || typeof item.providerDerived === "boolean") &&
         typeof item.confidence === "string" &&
         confidence.has(item.confidence as LanguageRelationship["confidence"]) &&
