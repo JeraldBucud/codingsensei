@@ -159,9 +159,7 @@ function edgeWeight(edge: StructuralEdge): number {
 
 function relationshipReason(edge: StructuralEdge, direction: "incoming" | "outgoing"): string {
   const label =
-    edge.type === "related-test"
-      ? "source/test relationship"
-      : edge.type.replace("-", " ");
+    edge.type === "related-test" ? "source/test relationship" : edge.type.replace("-", " ");
   return direction === "outgoing"
     ? `direct ${label} from the active file`
     : `direct ${label} into the active file`;
