@@ -326,6 +326,9 @@ export class ProjectIntelligenceService {
       return undefined;
     }
 
+    if (this.persistenceService) {
+      void this.persistenceService.clearFileKnowledge(resolution.projectRoot);
+    }
     this.invalidateRoot(resolution.projectRoot.uri);
     return resolution.projectRoot;
   }
@@ -365,6 +368,7 @@ export class ProjectIntelligenceService {
   }
 
   private async validateRestoredIndex(root: WorkspaceRoot): Promise<void> {
+    const restored = this.cache.get(root.uri)?.index;
     const generation = this.cache.begin(root);
     try {
       const index = await this.scanIndex(root);
@@ -372,6 +376,12 @@ export class ProjectIntelligenceService {
         return;
       }
       if (this.persistenceService) {
+        if (
+          restored &&
+          projectMetadataSignature(restored) !== projectMetadataSignature(index)
+        ) {
+          await this.persistenceService.clearFileKnowledge(root);
+        }
         await this.persistenceService.saveProjectCatalog(root, index);
       }
     } catch {
@@ -666,6 +676,16 @@ function uriRelativePath(uri: vscode.Uri, rootUri: vscode.Uri): string {
     : childPath.startsWith(`${rootPath}/`)
       ? childPath.slice(rootPath.length + 1)
       : normalizePath(vscode.workspace.asRelativePath(uri, false));
+}
+
+function projectMetadataSignature(index: ProjectIndex): string {
+  return JSON.stringify({
+    manifestFiles: index.manifestFiles,
+    configFiles: index.configFiles,
+    tools: index.tools,
+    scripts: index.scripts,
+    packageNames: index.metadata.packageNames
+  });
 }
 
 function isWorkspaceProject(projectRoot: WorkspaceRoot, workspaceRoot: WorkspaceRoot): boolean {
