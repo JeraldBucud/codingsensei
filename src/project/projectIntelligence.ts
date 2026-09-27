@@ -11,6 +11,11 @@ import type { FrameworkDetection } from "../framework/models";
 import type { LanguageAnalysis, LanguageDocumentInput } from "../language/models";
 import { readGitState } from "./gitAdapter";
 import { ProjectIndexCache } from "./projectCache";
+import { restoreProjectIndexFromCatalog } from "./projectCatalog";
+import {
+  hashContent,
+  restoreLanguageAnalysisFromKnowledge
+} from "./projectKnowledge";
 import type { ProjectPersistenceService } from "./projectPersistence";
 import { dirname, normalizePath } from "./pathUtils";
 import {
@@ -52,6 +57,11 @@ export interface ProjectWorkspaceAdapter {
   ) => Promise<readonly ProjectFileRecord[]>;
   readonly findMetadataFiles: (root: WorkspaceRoot) => Promise<readonly ProjectFileRecord[]>;
   readonly readGitState: (root: WorkspaceRoot, activeFile?: string) => Promise<GitProjectState>;
+}
+
+export interface RestoredLanguageKnowledge {
+  readonly analysis: LanguageAnalysis;
+  readonly frameworks: readonly FrameworkDetection[];
 }
 
 export class ProjectIntelligenceService {
@@ -116,6 +126,17 @@ export class ProjectIntelligenceService {
       return this.buildAnalysis(cached.index, activeFile, git);
     }
 
+    if (!options.force) {
+      const restored = await this.restorePersistentIndex(root);
+      if (restored) {
+        const git = options.refreshGit
+          ? await this.refreshGitForRoot(root, activeFile)
+          : this.gitCache.get(root.uri);
+        void this.validateRestoredIndex(root);
+        return this.buildAnalysis(restored, activeFile, git);
+      }
+    }
+
     const generation = this.cache.begin(root);
     this.analyzing.add(root.uri);
 
@@ -145,6 +166,35 @@ export class ProjectIntelligenceService {
     } finally {
       this.analyzing.delete(root.uri);
     }
+  }
+
+  async restoreLanguageKnowledge(
+    root: WorkspaceRoot | undefined,
+    document: LanguageDocumentInput
+  ): Promise<RestoredLanguageKnowledge | undefined> {
+    if (!root || !this.persistenceService) {
+      return undefined;
+    }
+
+    const relativePath =
+      document.projectRelativePath ?? document.relativePath ?? document.fileName;
+    const knowledge = await this.persistenceService.loadFileKnowledge(root, relativePath);
+    if (
+      !knowledge ||
+      knowledge.languageId !== document.languageId ||
+      knowledge.contentHash !== hashContent(document.text)
+    ) {
+      return undefined;
+    }
+
+    return {
+      analysis: restoreLanguageAnalysisFromKnowledge(knowledge),
+      frameworks: knowledge.frameworks.map((framework) => ({
+        ...framework,
+        evidence: framework.evidence.map((evidence) => ({ ...evidence })),
+        roles: [...framework.roles]
+      }))
+    };
   }
 
   async saveLanguageKnowledge(
@@ -245,6 +295,36 @@ export class ProjectIntelligenceService {
       .sort((a, b) => (b.root.relativePath?.length ?? 0) - (a.root.relativePath?.length ?? 0));
 
     return matching[0] ?? this.cache.get(workspaceRoot.uri);
+  }
+
+  private async restorePersistentIndex(root: WorkspaceRoot): Promise<ProjectIndex | undefined> {
+    if (!this.persistenceService) {
+      return undefined;
+    }
+
+    const catalog = await this.persistenceService.loadProjectCatalog(root);
+    if (!catalog) {
+      return undefined;
+    }
+
+    const index = restoreProjectIndexFromCatalog(root, catalog);
+    const generation = this.cache.begin(root);
+    return this.cache.setCurrent(root, generation, index) ? index : undefined;
+  }
+
+  private async validateRestoredIndex(root: WorkspaceRoot): Promise<void> {
+    const generation = this.cache.begin(root);
+    try {
+      const index = await this.scanIndex(root);
+      if (!this.cache.setCurrent(root, generation, index)) {
+        return;
+      }
+      if (this.persistenceService) {
+        await this.persistenceService.saveProjectCatalog(root, index);
+      }
+    } catch {
+      // Restored project intelligence remains usable if background validation fails.
+    }
   }
 
   private async scanIndex(root: WorkspaceRoot): Promise<ProjectIndex> {
