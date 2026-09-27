@@ -52,6 +52,14 @@ function createMemoryAdapter() {
       knowledge.delete(`${id}:${key}`);
       return Promise.resolve();
     },
+    deleteAllProjectKnowledge: (id) => {
+      for (const key of [...knowledge.keys()]) {
+        if (key.startsWith(`${id}:`)) {
+          knowledge.delete(key);
+        }
+      }
+      return Promise.resolve();
+    },
     deleteProjectStorage: (id) => {
       storageDeletes += 1;
       manifests.delete(id);
@@ -165,8 +173,8 @@ describe("project persistence service", () => {
     expect(catalog).toMatchObject({
       schemaVersion: 1,
       projectId,
-      sourceFileCount: 1,
-      testFileCount: 1,
+      sourceFiles: ["src/app.ts"],
+      testFiles: ["src/app.test.ts"],
       codeFiles: ["src/app.test.ts", "src/app.ts"]
     });
   });
