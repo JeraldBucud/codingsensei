@@ -189,11 +189,17 @@ export class ProjectPersistenceService {
       Math.max(0, limit)
     );
     const records: PersistentFileKnowledge[] = [];
+    const batchSize = 32;
 
-    for (const relativePath of boundedPaths) {
-      const knowledge = await this.loadFileKnowledge(root, relativePath);
-      if (knowledge) {
-        records.push(knowledge);
+    for (let index = 0; index < boundedPaths.length; index += batchSize) {
+      const batch = boundedPaths.slice(index, index + batchSize);
+      const loaded = await Promise.all(
+        batch.map((relativePath) => this.loadFileKnowledge(root, relativePath))
+      );
+      for (const knowledge of loaded) {
+        if (knowledge) {
+          records.push(knowledge);
+        }
       }
     }
 
