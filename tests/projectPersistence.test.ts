@@ -125,7 +125,6 @@ describe("project persistence service", () => {
     });
   });
 
-
   it("does not fail persistence when self-ignore metadata cannot be written", async () => {
     const memory = createMemoryAdapter();
     const adapter: ProjectPersistenceAdapter = {
