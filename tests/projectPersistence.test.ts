@@ -21,6 +21,7 @@ function createMemoryAdapter() {
   const catalogs = new Map<string, string>();
   const knowledge = new Map<string, string>();
   let identityWrites = 0;
+  let metadataIgnoreWrites = 0;
   let manifestWrites = 0;
   let catalogWrites = 0;
   let storageDeletes = 0;
@@ -30,6 +31,10 @@ function createMemoryAdapter() {
     writeProjectIdentity: (projectRoot, content) => {
       identityWrites += 1;
       identities.set(projectRoot.uri, content);
+      return Promise.resolve();
+    },
+    ensureProjectMetadataIgnored: () => {
+      metadataIgnoreWrites += 1;
       return Promise.resolve();
     },
     writeProjectManifest: (id, content) => {
@@ -80,6 +85,7 @@ function createMemoryAdapter() {
     catalogs,
     knowledge,
     identityWrites: () => identityWrites,
+    metadataIgnoreWrites: () => metadataIgnoreWrites,
     manifestWrites: () => manifestWrites,
     catalogWrites: () => catalogWrites,
     storageDeletes: () => storageDeletes
@@ -104,6 +110,7 @@ describe("project persistence service", () => {
     });
     expect(second).toEqual(first);
     expect(memory.identityWrites()).toBe(1);
+    expect(memory.metadataIgnoreWrites()).toBe(1);
     expect(memory.manifestWrites()).toBe(1);
     expect(JSON.parse(memory.identities.get(root.uri) ?? "{}")).toMatchObject({
       schemaVersion: 1,
@@ -116,6 +123,29 @@ describe("project persistence service", () => {
       lastOpenedAt: "2026-09-26T14:30:00.000Z",
       lastKnownRootUri: root.uri
     });
+  });
+
+
+  it("does not fail persistence when self-ignore metadata cannot be written", async () => {
+    const memory = createMemoryAdapter();
+    const adapter: ProjectPersistenceAdapter = {
+      ...memory.adapter,
+      ensureProjectMetadataIgnored: () => Promise.reject(new Error("read-only ignore file"))
+    };
+    const service = new ProjectPersistenceService(adapter, {
+      createId: () => projectId,
+      now: () => new Date("2026-09-26T14:30:00.000Z")
+    });
+
+    const state = await service.ensureProject(root);
+
+    expect(state).toEqual({
+      status: "ready",
+      projectId,
+      identityCreated: true
+    });
+    expect(memory.identities.get(root.uri)).toBeDefined();
+    expect(memory.manifests.get(projectId)).toBeDefined();
   });
 
   it("reuses an existing identity when the same project appears at a new root", async () => {
