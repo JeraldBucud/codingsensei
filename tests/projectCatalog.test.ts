@@ -40,13 +40,16 @@ describe("persistent project catalog", () => {
 
     const parsed = parseProjectCatalog(serializeProjectCatalog(catalog));
     expect(parsed).toEqual(catalog);
+    if (!parsed) {
+      throw new Error("Expected a valid persisted project catalog.");
+    }
 
     const movedRoot: WorkspaceRoot = {
       name: "demo-moved",
       uri: "file:///moved/demo-moved",
       path: "/moved/demo-moved"
     };
-    const restored = restoreProjectIndexFromCatalog(movedRoot, parsed!);
+    const restored = restoreProjectIndexFromCatalog(movedRoot, parsed);
 
     expect(restored.root).toEqual(movedRoot);
     expect(restored.codeFiles).toEqual(index.codeFiles);
