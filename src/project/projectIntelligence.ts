@@ -376,10 +376,7 @@ export class ProjectIntelligenceService {
         return;
       }
       if (this.persistenceService) {
-        if (
-          restored &&
-          projectMetadataSignature(restored) !== projectMetadataSignature(index)
-        ) {
+        if (restored && projectMetadataSignature(restored) !== projectMetadataSignature(index)) {
           await this.persistenceService.clearFileKnowledge(root);
         }
         await this.persistenceService.saveProjectCatalog(root, index);
