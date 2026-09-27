@@ -76,17 +76,28 @@ export function createVsCodeProjectPersistenceAdapter(
         }
       }
     },
+    deleteAllProjectKnowledge: async (projectId) => {
+      const directory = vscode.Uri.joinPath(
+        projectStorageDirectory(globalStorageUri, projectId),
+        projectKnowledgeDirectoryName
+      );
+      await deleteDirectoryIfExists(directory);
+    },
     deleteProjectStorage: async (projectId) => {
       const directory = projectStorageDirectory(globalStorageUri, projectId);
-      try {
-        await vscode.workspace.fs.delete(directory, { recursive: true, useTrash: false });
-      } catch (error) {
-        if (!(error instanceof vscode.FileSystemError) || error.code !== "FileNotFound") {
-          throw error;
-        }
-      }
+      await deleteDirectoryIfExists(directory);
     }
   };
+}
+
+async function deleteDirectoryIfExists(uri: vscode.Uri): Promise<void> {
+  try {
+    await vscode.workspace.fs.delete(uri, { recursive: true, useTrash: false });
+  } catch (error) {
+    if (!(error instanceof vscode.FileSystemError) || error.code !== "FileNotFound") {
+      throw error;
+    }
+  }
 }
 
 function projectIdentityUri(root: WorkspaceRoot): vscode.Uri {
