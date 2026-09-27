@@ -418,7 +418,11 @@ export class CodingSenseiController implements vscode.Disposable {
     }
 
     void vscode.window.showInformationMessage(
-      `CodingSensei structural intelligence: ${String(graph.indexedFileCount)}/${String(graph.totalFileCount)} files indexed · ${String(graph.symbolCount)} symbols · ${String(graph.relationshipCount)} relationships`
+      `CodingSensei structural intelligence: ${String(graph.indexedFileCount)}/${String(
+        graph.totalFileCount
+      )} files indexed · ${String(graph.symbolCount)} symbols · ${String(
+        graph.relationshipCount
+      )} relationships`
     );
   }
 
@@ -429,7 +433,8 @@ export class CodingSenseiController implements vscode.Disposable {
 
     const query = await vscode.window.showInputBox({
       title: "CodingSensei: Find Relevant Project Files",
-      prompt: "Describe what you are looking for. Leave blank to use structural relationships from the active file.",
+      prompt:
+        "Describe what you are looking for. Leave blank to use structural relationships from the active file.",
       placeHolder: "for example: user service, route handler, tests"
     });
     if (query === undefined) {
@@ -443,7 +448,8 @@ export class CodingSenseiController implements vscode.Disposable {
     );
     if (results.length === 0) {
       void vscode.window.showInformationMessage(
-        "CodingSensei did not find structurally relevant indexed files. Build Deep Project Intelligence to increase coverage."
+        "CodingSensei did not find structurally relevant indexed files. " +
+          "Build Deep Project Intelligence to increase coverage."
       );
       return;
     }
@@ -514,7 +520,9 @@ export class CodingSenseiController implements vscode.Disposable {
     const suffix = summary.truncated ? " · bounded to the first 1000 code files" : "";
     const state = summary.cancelled ? "cancelled" : "complete";
     void vscode.window.showInformationMessage(
-      `CodingSensei deep indexing ${state}: ${String(summary.indexed)} indexed · ${String(summary.reused)} reused · ${String(summary.skipped)} skipped${suffix}`
+      `CodingSensei deep indexing ${state}: ${String(summary.indexed)} indexed · ${String(
+        summary.reused
+      )} reused · ${String(summary.skipped)} skipped${suffix}`
     );
   }
 
