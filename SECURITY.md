@@ -15,3 +15,7 @@ Phase 1 reads local project paths and small known metadata files such as `packag
 ## Phase 3 Local Persistence
 
 Phase 3 introduces a small versioned `.codingsensei/project.json` identity file at the resolved project root. The file contains only a schema version, a randomly generated project UUID and its creation timestamp; it does not contain source code, credentials, absolute paths or model data. CodingSensei also writes a local project manifest beneath the extension's VS Code global storage, keyed by that UUID, so larger future intelligence data can remain outside the repository. The local manifest may record the last known project-root URI for local project recognition and management. A separate local structural catalog may store relative source/test file paths, project metadata summaries, tool/script names and scan counts. The catalog does not store source-file contents. CodingSensei does not upload this information or transmit it to external services.
+
+## Local Git Hygiene
+
+CodingSensei treats the small `.codingsensei` project-identity directory as machine-local metadata. It writes a local `.codingsensei/.gitignore` containing `*` so the directory ignores itself and its generated identity file without modifying the repository's root `.gitignore`, Git configuration, remotes, hooks or tracked files. Failure to create this self-ignore file does not disable project persistence.
