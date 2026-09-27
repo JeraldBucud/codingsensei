@@ -191,6 +191,7 @@ function createMemoryPersistenceService(
     readProjectKnowledge: () => Promise.resolve(undefined),
     writeProjectKnowledge: () => Promise.resolve(),
     deleteProjectKnowledge: () => Promise.resolve(),
+    deleteAllProjectKnowledge: () => Promise.resolve(),
     deleteProjectStorage: () => Promise.resolve()
   };
   return new ProjectPersistenceService(adapter, {
