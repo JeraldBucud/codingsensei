@@ -239,7 +239,7 @@ export class CodingSenseiController implements vscode.Disposable {
     this.publish();
   }
 
-  private async refreshLanguage(force: boolean): Promise<void> {
+  private async refreshLanguage(force: boolean, allowRestore = !force): Promise<void> {
     if (!this.currentContext) {
       return;
     }
@@ -252,6 +252,32 @@ export class CodingSenseiController implements vscode.Disposable {
     }
 
     const contextAtStart = this.currentContext;
+    if (allowRestore) {
+      const restored = await this.projectService.restoreLanguageKnowledge(
+        this.projectAnalysis?.snapshot?.root,
+        document
+      );
+      if (this.currentContext !== contextAtStart) {
+        return;
+      }
+      if (restored) {
+        this.languageAnalysis = this.languageService.prime(document, restored.analysis);
+        this.frameworkDetections = restored.frameworks;
+        this.languageProjectContextKey = createLanguageProjectContextKey({
+          document,
+          snapshot: this.projectAnalysis?.snapshot
+        });
+        this.nextStep = this.nextStepService.choose(
+          this.currentContext,
+          this.projectAnalysis,
+          this.languageAnalysis,
+          this.frameworkDetections
+        );
+        this.publish();
+        return;
+      }
+    }
+
     const analysis = await this.languageService.analyze(document, force);
     if (this.currentContext !== contextAtStart) {
       return;
@@ -306,7 +332,7 @@ export class CodingSenseiController implements vscode.Disposable {
       })
     ) {
       this.debouncedLanguageRefresh.cancel();
-      void this.refreshLanguage(true);
+      void this.refreshLanguage(true, true);
     }
   }
 
