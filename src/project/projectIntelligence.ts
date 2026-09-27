@@ -238,7 +238,7 @@ export class ProjectIntelligenceService {
 
   async updateSourceFile(
     uri: vscode.Uri,
-    change: "create" | "delete"
+    change: "create" | "change" | "delete"
   ): Promise<WorkspaceRoot | undefined> {
     const resolution = await this.adapter.resolveProjectRootForUri(uri);
     if (!resolution) {
@@ -247,6 +247,14 @@ export class ProjectIntelligenceService {
 
     const root = resolution.projectRoot;
     const activeFile = resolution.activeFile;
+
+    if (change === "change") {
+      if (activeFile && this.persistenceService) {
+        void this.persistenceService.deleteFileKnowledge(root, activeFile);
+      }
+      return root;
+    }
+
     const cached = this.cache.get(root.uri);
     if (!cached || !activeFile) {
       this.invalidateRoot(root.uri);
