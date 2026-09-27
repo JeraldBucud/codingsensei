@@ -37,7 +37,10 @@
     "onCommand:codingsensei.resetHints",
     "onCommand:codingsensei.showProjectIntelligence",
     "onCommand:codingsensei.rebuildProjectIntelligence",
-    "onCommand:codingsensei.clearProjectIntelligence"
+    "onCommand:codingsensei.clearProjectIntelligence",
+    "onCommand:codingsensei.showStructuralIntelligence",
+    "onCommand:codingsensei.findRelevantProjectFiles",
+    "onCommand:codingsensei.buildStructuralIntelligence"
   ],
   "contributes": {
     "commands": [
@@ -77,6 +80,21 @@
       {
         "command": "codingsensei.clearProjectIntelligence",
         "title": "CodingSensei: Clear Stored Project Intelligence",
+        "category": "CodingSensei"
+      },
+      {
+        "command": "codingsensei.showStructuralIntelligence",
+        "title": "CodingSensei: Show Structural Intelligence",
+        "category": "CodingSensei"
+      },
+      {
+        "command": "codingsensei.findRelevantProjectFiles",
+        "title": "CodingSensei: Find Relevant Project Files",
+        "category": "CodingSensei"
+      },
+      {
+        "command": "codingsensei.buildStructuralIntelligence",
+        "title": "CodingSensei: Build Deep Project Intelligence",
         "category": "CodingSensei"
       }
     ],
