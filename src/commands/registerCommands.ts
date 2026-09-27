@@ -510,11 +510,15 @@ export class CodingSenseiController implements vscode.Disposable {
     const selected = await vscode.window.showQuickPick(
       results.map((result) => ({
         label: result.file,
-        description: `score ${String(result.score)}`,
+        description:
+          result.line === undefined
+            ? `score ${String(result.score)}`
+            : `score ${String(result.score)} · line ${String(result.line + 1)}`,
         detail: [...result.reasons, ...result.matchedSymbols.map((name) => `symbol: ${name}`)].join(
           " · "
         ),
-        file: result.file
+        file: result.file,
+        line: result.line
       })),
       {
         title: "CodingSensei: Relevant Project Files",
@@ -527,7 +531,7 @@ export class CodingSenseiController implements vscode.Disposable {
       return;
     }
 
-    await this.openProjectFile(selected.file);
+    await this.openProjectFile(selected.file, selected.line);
   }
 
   private async openProjectFile(relativePath: string, line?: number): Promise<void> {
