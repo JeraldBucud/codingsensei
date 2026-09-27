@@ -1,19 +1,9 @@
 import { dirname, fileName, normalizePath, withoutExtension } from "./pathUtils";
 import { isLikelyTestPath } from "./sourceTestRelations";
-import type {
-  StructuralEdgeType,
-  StructuralFileNode,
-  StructuralGraph
-} from "./structuralGraph";
+import type { StructuralEdgeType, StructuralFileNode, StructuralGraph } from "./structuralGraph";
 
 export type ArchitectureRole =
-  | "ui"
-  | "routing"
-  | "service"
-  | "data"
-  | "test"
-  | "bootstrap"
-  | "other";
+  "ui" | "routing" | "service" | "data" | "test" | "bootstrap" | "other";
 
 export interface ArchitectureFileInsight {
   readonly file: string;
@@ -41,9 +31,7 @@ export interface ArchitectureInsights {
 }
 
 export function analyzeArchitecture(graph: StructuralGraph): ArchitectureInsights {
-  const fileNodes = graph.nodes.filter(
-    (node): node is StructuralFileNode => node.kind === "file"
-  );
+  const fileNodes = graph.nodes.filter((node): node is StructuralFileNode => node.kind === "file");
   const inbound = new Map<string, number>();
   const outbound = new Map<string, number>();
   const adjacency = new Map<string, Set<string>>();
@@ -244,10 +232,7 @@ function buildFeatureDirectoryClusters(
   files: readonly ArchitectureFileInsight[],
   insightByFile: ReadonlyMap<string, ArchitectureFileInsight>
 ): readonly ArchitectureCluster[] {
-  const groups = new Map<
-    string,
-    { readonly label: string; readonly files: string[] }
-  >();
+  const groups = new Map<string, { readonly label: string; readonly files: string[] }>();
 
   for (const insight of files) {
     const feature = featureDirectory(insight.file);
