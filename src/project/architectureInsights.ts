@@ -91,14 +91,14 @@ export function analyzeArchitecture(graph: StructuralGraph): ArchitectureInsight
   ).map((clusterFiles, index) =>
     buildCluster(
       `connectivity-${String(index + 1)}`,
-      clusterLabel(clusterFiles, collectRoles(clusterFiles, fileInsightByPath)),
+      clusterLabel(clusterFiles, [...collectRoles(clusterFiles, fileInsightByPath)]),
       "connectivity",
       clusterFiles,
       fileInsightByPath
     )
   );
   const featureClusters = buildFeatureDirectoryClusters(files, fileInsightByPath);
-  const clusters = dedupeClusters([...featureClusters, ...connectivityClusters]).sort(
+  const clusters = [...dedupeClusters([...featureClusters, ...connectivityClusters])].sort(
     (a, b) =>
       clusterBasisRank(a.basis) - clusterBasisRank(b.basis) ||
       b.files.length - a.files.length ||
