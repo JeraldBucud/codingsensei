@@ -46,6 +46,8 @@ Async analysis uses generation checks so stale scans cannot overwrite a newer ac
 
 Phase 3 assigns each resolved project a stable local identity. The project root may contain a tiny `.codingsensei/project.json` document with a versioned schema, UUID and creation timestamp. It intentionally contains no source contents, absolute paths, credentials or model data. Existing valid identities are reused, including after a project folder is renamed or moved. Invalid identity files are reported as unavailable rather than silently replaced.
 
+The `.codingsensei` directory is local metadata rather than repository content. CodingSensei writes `.codingsensei/.gitignore` with `*`, which causes the directory and its generated files to ignore themselves in Git without changing the user's root `.gitignore` or Git configuration. This self-ignore step is best-effort so a read-only metadata directory does not disable otherwise valid persistence.
+
 Larger persistent intelligence belongs outside the repository. CodingSensei uses the VS Code extension `globalStorageUri` and creates a project-specific directory keyed by the stable project UUID. The first storage record is a small manifest containing the schema version, stable project ID, creation time, most recent open time and last known local root URI. This establishes the storage boundary required for later persistent indexes without putting large generated databases into Git.
 
 Identity/storage initialization is best-effort and independent from deterministic project analysis. If a workspace is read-only, the identity is malformed, or extension storage is unavailable, CodingSensei continues to provide the existing in-memory project intelligence and exposes persistence as unavailable instead of disabling Learning Mode.
