@@ -28,6 +28,7 @@ export const projectStorageSchemaVersion = 1 as const;
 export interface ProjectPersistenceAdapter {
   readonly readProjectIdentity: (root: WorkspaceRoot) => Promise<string | undefined>;
   readonly writeProjectIdentity: (root: WorkspaceRoot, content: string) => Promise<void>;
+  readonly ensureProjectMetadataIgnored?: (root: WorkspaceRoot) => Promise<void>;
   readonly writeProjectManifest: (projectId: string, content: string) => Promise<void>;
   readonly readProjectCatalog: (projectId: string) => Promise<string | undefined>;
   readonly writeProjectCatalog: (projectId: string, content: string) => Promise<void>;
@@ -234,6 +235,12 @@ export class ProjectPersistenceService {
 
       if (identityCreated) {
         await this.adapter.writeProjectIdentity(root, serializeProjectIdentity(identity));
+      }
+
+      try {
+        await this.adapter.ensureProjectMetadataIgnored?.(root);
+      } catch {
+        // Keeping local project metadata out of Git is best-effort and must not disable persistence.
       }
 
       const manifest = createPersistentManifest(identity, root, this.dependencies.now);
