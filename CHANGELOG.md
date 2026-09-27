@@ -7,6 +7,7 @@ Notable CodingSensei changes are recorded here. CodingSensei follows Semantic Ve
 ### Persistent Project Intelligence
 
 - Added the Phase 3 project-identity foundation with a versioned `.codingsensei/project.json` file and stable UUID.
+- The local `.codingsensei` metadata directory now self-ignores through its own generated `.gitignore`, so enabling CodingSensei does not dirty the user's Git working tree or edit the repository's root `.gitignore`.
 - Added local extension-storage manifests under CodingSensei's VS Code global storage, keyed by the stable project ID.
 - Project identity creation is idempotent, malformed identity files are not silently overwritten, and persistence failures do not disable deterministic project analysis.
 - Learning Mode now surfaces whether persistent project identity is ready for the active project.
