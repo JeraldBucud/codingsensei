@@ -54,10 +54,7 @@ export function createVsCodeProjectPersistenceAdapter(
       );
     },
     readProjectKnowledge: async (projectId, knowledgeKey) =>
-      readTextIfExists(
-        projectKnowledgeUri(globalStorageUri, projectId, knowledgeKey),
-        decoder
-      ),
+      readTextIfExists(projectKnowledgeUri(globalStorageUri, projectId, knowledgeKey), decoder),
     writeProjectKnowledge: async (projectId, knowledgeKey, content) => {
       const directory = vscode.Uri.joinPath(
         projectStorageDirectory(globalStorageUri, projectId),
@@ -100,7 +97,10 @@ function projectIdentityUri(root: WorkspaceRoot): vscode.Uri {
   );
 }
 
-function projectStorageDirectory(globalStorageUri: vscode.Uri, projectId: string): vscode.Uri {
+function projectStorageDirectory(
+  globalStorageUri: vscode.Uri,
+  projectId: string
+): vscode.Uri {
   return vscode.Uri.joinPath(globalStorageUri, "projects", projectId);
 }
 
