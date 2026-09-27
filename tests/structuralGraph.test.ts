@@ -221,7 +221,6 @@ describe("structural graph", () => {
     expect(call?.to).toContain(":validateUser");
   });
 
-
   it("does not resolve qualified built-in calls to similarly named local symbols", () => {
     const graph = buildStructuralGraph({
       catalog: {
