@@ -113,6 +113,9 @@ export class CodingSenseiController implements vscode.Disposable {
       projectMetadataWatcher.onDidDelete((uri) => {
         void this.invalidateChangedProject(uri);
       }),
+      projectFileWatcher.onDidChange((uri) => {
+        void this.updateChangedSourceFile(uri, "change");
+      }),
       projectFileWatcher.onDidCreate((uri) => {
         void this.updateChangedSourceFile(uri, "create");
       }),
@@ -338,7 +341,7 @@ export class CodingSenseiController implements vscode.Disposable {
 
   private async updateChangedSourceFile(
     uri: vscode.Uri,
-    change: "create" | "delete"
+    change: "create" | "change" | "delete"
   ): Promise<void> {
     const relativePath = vscode.workspace.asRelativePath(uri, false);
     if (isIgnoredProjectPath(relativePath)) {
