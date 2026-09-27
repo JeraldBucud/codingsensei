@@ -270,6 +270,30 @@ describe("language intelligence", () => {
     ]);
   });
 
+  it("primes the cache from restored persistent analysis without calling the provider", () => {
+    let calls = 0;
+    const service = new LanguageIntelligenceService({
+      analyzeDocument: (document) => {
+        calls += 1;
+        return Promise.resolve(analysisFor(document, "Provider"));
+      }
+    });
+    const input = documentInput({ cursor: { line: 2, character: 5 } });
+    const restored = analysisFor(input, "Restored");
+
+    const analysis = service.prime(input, restored);
+
+    expect(calls).toBe(0);
+    expect(analysis.currentSymbol?.name).toBe("Restored");
+    expect(
+      service.getCached({
+        uri: input.uri,
+        version: input.version,
+        cursor: input.cursor
+      }).symbols[0]?.name
+    ).toBe("Restored");
+  });
+
   it("does not call the provider again for the same document version", async () => {
     let calls = 0;
     const adapter: LanguageProviderAdapter = {
