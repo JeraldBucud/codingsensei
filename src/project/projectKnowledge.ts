@@ -75,9 +75,7 @@ export function serializePersistentFileKnowledge(knowledge: PersistentFileKnowle
   return `${JSON.stringify(knowledge, null, 2)}\n`;
 }
 
-export function parsePersistentFileKnowledge(
-  content: string
-): PersistentFileKnowledge | undefined {
+export function parsePersistentFileKnowledge(content: string): PersistentFileKnowledge | undefined {
   let parsed: unknown;
   try {
     parsed = JSON.parse(content) as unknown;
