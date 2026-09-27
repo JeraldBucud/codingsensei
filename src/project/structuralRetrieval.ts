@@ -11,6 +11,14 @@ export interface StructuralRetrievalItem {
   readonly score: number;
   readonly reasons: readonly string[];
   readonly matchedSymbols: readonly string[];
+  readonly line?: number;
+}
+
+interface MutableRetrievalScore {
+  score: number;
+  readonly reasons: Set<string>;
+  readonly matchedSymbols: Set<string>;
+  line?: number;
 }
 
 export interface StructuralRetrievalOptions {
@@ -26,14 +34,15 @@ export function retrieveStructuralContext(
   const limit = Math.max(1, Math.min(options.limit ?? 8, 20));
   const activeFile = options.activeFile ? normalizePath(options.activeFile) : undefined;
   const tokens = tokenize(options.query ?? "");
-  const scores = new Map<
-    string,
-    { score: number; reasons: Set<string>; matchedSymbols: Set<string> }
-  >();
+  const scores = new Map<string, MutableRetrievalScore>();
 
   for (const node of graph.nodes) {
     if (node.kind === "file") {
-      scores.set(node.file, { score: 0, reasons: new Set(), matchedSymbols: new Set() });
+      scores.set(node.file, {
+        score: 0,
+        reasons: new Set(),
+        matchedSymbols: new Set()
+      });
     }
   }
 
@@ -51,7 +60,8 @@ export function retrieveStructuralContext(
       file,
       score: value.score,
       reasons: [...value.reasons],
-      matchedSymbols: [...value.matchedSymbols].sort()
+      matchedSymbols: [...value.matchedSymbols].sort(),
+      line: value.line
     }))
     .sort((a, b) => b.score - a.score || a.file.localeCompare(b.file))
     .slice(0, limit);
@@ -60,7 +70,7 @@ export function retrieveStructuralContext(
 function scoreStructuralNeighbors(
   graph: StructuralGraph,
   activeFile: string,
-  scores: Map<string, { score: number; reasons: Set<string>; matchedSymbols: Set<string> }>
+  scores: Map<string, MutableRetrievalScore>
 ): void {
   const activeNode = fileNodeId(activeFile);
   for (const edge of graph.edges) {
@@ -84,7 +94,7 @@ function scoreStructuralNeighbors(
 function scoreQueryMatches(
   graph: StructuralGraph,
   tokens: readonly string[],
-  scores: Map<string, { score: number; reasons: Set<string>; matchedSymbols: Set<string> }>
+  scores: Map<string, MutableRetrievalScore>
 ): void {
   const symbolsByFile = new Map<string, StructuralSymbolNode[]>();
   for (const node of graph.nodes) {
@@ -115,10 +125,12 @@ function scoreQueryMatches(
           value.score += 10;
           value.reasons.add(`symbol matches "${token}"`);
           value.matchedSymbols.add(symbol.name);
+          value.line ??= symbol.line;
         } else if (symbolName.includes(token) || token.includes(symbolName)) {
           value.score += 5;
           value.reasons.add(`symbol relates to "${token}"`);
           value.matchedSymbols.add(symbol.name);
+          value.line ??= symbol.line;
         }
       }
     }
@@ -126,7 +138,7 @@ function scoreQueryMatches(
 }
 
 function addScore(
-  scores: Map<string, { score: number; reasons: Set<string>; matchedSymbols: Set<string> }>,
+  scores: Map<string, MutableRetrievalScore>,
   file: string,
   amount: number,
   reason: string
