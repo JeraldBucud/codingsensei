@@ -99,6 +99,9 @@ export class CodingSenseiController implements vscode.Disposable {
       vscode.commands.registerCommand("codingsensei.showStructuralIntelligence", async () => {
         await this.showStructuralIntelligence();
       }),
+      vscode.commands.registerCommand("codingsensei.showArchitectureInsights", async () => {
+        await this.showArchitectureInsights();
+      }),
       vscode.commands.registerCommand("codingsensei.findRelevantProjectFiles", async () => {
         await this.findRelevantProjectFiles();
       }),
@@ -426,6 +429,56 @@ export class CodingSenseiController implements vscode.Disposable {
     );
   }
 
+  private async showArchitectureInsights(): Promise<void> {
+    if (!this.currentContext) {
+      return;
+    }
+
+    const insights = await this.projectService.getArchitectureInsights(
+      this.currentContext.activeEditor
+    );
+    if (!insights) {
+      void vscode.window.showInformationMessage(
+        "CodingSensei architecture insights are not available for the active project yet."
+      );
+      return;
+    }
+
+    const roleSummary = Object.entries(insights.roleCounts)
+      .filter(([, count]) => count > 0)
+      .map(([role, count]) => `${role} ${String(count)}`)
+      .join(" · ");
+
+    const cluster = await vscode.window.showQuickPick(
+      insights.clusters.map((item) => ({
+        label: item.label,
+        description: `${String(item.files.length)} files`,
+        detail: [
+          item.roles.length > 0 ? `roles: ${item.roles.join(", ")}` : "",
+          item.frameworks.length > 0 ? `frameworks: ${item.frameworks.join(", ")}` : ""
+        ]
+          .filter(Boolean)
+          .join(" · "),
+        cluster: item
+      })),
+      {
+        title: `CodingSensei Architecture · ${roleSummary || "structural roles pending"}`,
+        placeHolder: "Select a structural cluster to inspect"
+      }
+    );
+    if (!cluster) {
+      return;
+    }
+
+    const selectedFile = await vscode.window.showQuickPick(cluster.cluster.files, {
+      title: cluster.cluster.label,
+      placeHolder: "Select a file to open"
+    });
+    if (selectedFile) {
+      await this.openProjectFile(selectedFile);
+    }
+  }
+
   private async findRelevantProjectFiles(): Promise<void> {
     if (!this.currentContext) {
       return;
@@ -474,13 +527,23 @@ export class CodingSenseiController implements vscode.Disposable {
       return;
     }
 
+    await this.openProjectFile(selected.file);
+  }
+
+  private async openProjectFile(relativePath: string, line?: number): Promise<void> {
     const root = this.projectAnalysis?.snapshot?.root;
     if (!root) {
       return;
     }
-    const uri = vscode.Uri.joinPath(vscode.Uri.parse(root.uri), ...selected.file.split("/"));
+
+    const uri = vscode.Uri.joinPath(vscode.Uri.parse(root.uri), ...relativePath.split("/"));
     const document = await vscode.workspace.openTextDocument(uri);
-    await vscode.window.showTextDocument(document);
+    const editor = await vscode.window.showTextDocument(document);
+    if (line !== undefined && line >= 0 && line < document.lineCount) {
+      const position = new vscode.Position(line, 0);
+      editor.selection = new vscode.Selection(position, position);
+      editor.revealRange(new vscode.Range(position, position), vscode.TextEditorRevealType.InCenter);
+    }
   }
 
   private async buildStructuralIntelligence(): Promise<void> {
