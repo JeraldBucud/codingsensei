@@ -298,7 +298,10 @@ function callTargetFile(
   allowedCrossFileTargets: ReadonlySet<string>
 ): string | undefined {
   const localQualifier =
-    qualifier === undefined || qualifier === "this" || qualifier === "self" || qualifier === "super";
+    qualifier === undefined ||
+    qualifier === "this" ||
+    qualifier === "self" ||
+    qualifier === "super";
   if (localQualifier) {
     const localMatches = symbolNodes.get(fileSymbolKey(sourceFile, symbol)) ?? [];
     if (localMatches.length === 1) {
