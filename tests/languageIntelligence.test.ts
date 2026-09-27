@@ -154,6 +154,30 @@ describe("language intelligence", () => {
     );
   });
 
+  it("detects bounded calls inside known function ranges", () => {
+    const structure = analyzeDeterministicStructure({
+      fileName: "auth.ts",
+      languageId: "typescript",
+      text:
+        "function authenticate() {\n  validateUser();\n  userService.loadUser();\n}\n\nfunction validateUser() { return true; }"
+    });
+
+    expect(structure.relationships).toContainEqual(
+      expect.objectContaining({
+        type: "call",
+        target: "validateUser",
+        sourceSymbol: "authenticate"
+      })
+    );
+    expect(structure.relationships).toContainEqual(
+      expect.objectContaining({
+        type: "call",
+        target: "loadUser",
+        sourceSymbol: "authenticate"
+      })
+    );
+  });
+
   it("resolves Java service dependencies when one known local candidate exists", async () => {
     const service = new LanguageIntelligenceService();
     const analysis = await service.analyze(
