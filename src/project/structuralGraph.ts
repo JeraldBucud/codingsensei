@@ -223,9 +223,18 @@ function addRelationshipEdge(
   const targetFile = relationship.targetFile
     ? normalizePath(relationship.targetFile)
     : relationship.type === "call" && relationship.symbol
-      ? uniqueSymbolOwner(relationship.symbol, sourceFile, symbolOwners)
+      ? callTargetFile(
+          relationship.symbol,
+          sourceFile,
+          symbolOwners,
+          symbolNodes
+        )
       : undefined;
-  if (!targetFile || !knownFiles.has(targetFile) || targetFile === sourceFile) {
+  if (
+    !targetFile ||
+    !knownFiles.has(targetFile) ||
+    (targetFile === sourceFile && relationship.type !== "call")
+  ) {
     return;
   }
 
@@ -275,6 +284,19 @@ function edgeTypeForRelationship(
     default:
       return undefined;
   }
+}
+
+function callTargetFile(
+  symbol: string,
+  sourceFile: string,
+  symbolOwners: ReadonlyMap<string, ReadonlySet<string>>,
+  symbolNodes: ReadonlyMap<string, readonly StructuralSymbolNode[]>
+): string | undefined {
+  const localMatches = symbolNodes.get(fileSymbolKey(sourceFile, symbol)) ?? [];
+  if (localMatches.length === 1) {
+    return sourceFile;
+  }
+  return uniqueSymbolOwner(symbol, sourceFile, symbolOwners);
 }
 
 function fileSymbolKey(file: string, symbol: string): string {
