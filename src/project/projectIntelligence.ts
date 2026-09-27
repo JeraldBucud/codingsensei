@@ -13,9 +13,17 @@ import { LanguageIntelligenceService } from "../language/languageIntelligence";
 import type { LanguageAnalysis, LanguageDocumentInput } from "../language/models";
 import { readGitState } from "./gitAdapter";
 import { ProjectIndexCache } from "./projectCache";
-import { restoreProjectIndexFromCatalog } from "./projectCatalog";
+import { createProjectCatalog, restoreProjectIndexFromCatalog } from "./projectCatalog";
 import { hashContent, restoreLanguageAnalysisFromKnowledge } from "./projectKnowledge";
 import type { ProjectPersistenceService } from "./projectPersistence";
+import {
+  buildStructuralGraph,
+  type StructuralGraph
+} from "./structuralGraph";
+import {
+  retrieveStructuralContext,
+  type StructuralRetrievalItem
+} from "./structuralRetrieval";
 import { dirname, extension, fileName, normalizePath } from "./pathUtils";
 import {
   isPathInsideProject,
@@ -39,6 +47,7 @@ import {
 const scanLimit = 2500;
 const metadataReadLimitBytes = 128 * 1024;
 const backgroundSourceReadLimitBytes = 256 * 1024;
+const maxStructuralKnowledgeFiles = 1000;
 const sourceIncludePattern = "**/*.{ts,tsx,js,jsx,mts,cts,mjs,cjs,py,java}";
 const excludePattern =
   "**/{.git,node_modules,dist,build,out,target,coverage,.next,.venv,venv,__pycache__,vendor,generated}/**";
@@ -75,6 +84,7 @@ export class ProjectIntelligenceService {
   private gitCache = new Map<string, GitProjectState>();
   private gitGenerations = new Map<string, number>();
   private persistenceState = new Map<string, ProjectPersistenceSummary>();
+  private structuralGraphCache = new Map<string, StructuralGraph>();
   private analyzing = new Set<string>();
 
   constructor(
@@ -155,6 +165,7 @@ export class ProjectIntelligenceService {
       }
 
       if (this.persistenceService) {
+        this.structuralGraphCache.delete(root.uri);
         void this.persistenceService.saveProjectCatalog(root, index);
       }
 
@@ -250,7 +261,77 @@ export class ProjectIntelligenceService {
     if (!root || !this.persistenceService || analysis.status === "unavailable") {
       return false;
     }
-    return this.persistenceService.saveFileKnowledge(root, document, analysis, frameworks);
+    const saved = await this.persistenceService.saveFileKnowledge(
+      root,
+      document,
+      analysis,
+      frameworks
+    );
+    if (saved) {
+      this.structuralGraphCache.delete(root.uri);
+    }
+    return saved;
+  }
+
+  async getStructuralGraph(
+    activeEditor: ActiveEditorContext | undefined
+  ): Promise<StructuralGraph | undefined> {
+    if (!this.persistenceService) {
+      return undefined;
+    }
+
+    const resolution = await this.adapter.resolveProjectRoot(activeEditor);
+    if (!resolution) {
+      return undefined;
+    }
+
+    const root = resolution.projectRoot;
+    const cachedGraph = this.structuralGraphCache.get(root.uri);
+    if (cachedGraph) {
+      return cachedGraph;
+    }
+
+    await this.ensurePersistence(root);
+    let catalog = await this.persistenceService.loadProjectCatalog(root);
+    if (!catalog) {
+      const cachedIndex = this.cache.get(root.uri)?.index;
+      const state = this.persistenceService.getState(root.uri);
+      if (!cachedIndex || state?.status !== "ready" || !state.projectId) {
+        return undefined;
+      }
+      catalog = createProjectCatalog(state.projectId, cachedIndex);
+    }
+
+    const knowledge = await this.persistenceService.loadProjectKnowledge(
+      root,
+      catalog.codeFiles,
+      maxStructuralKnowledgeFiles
+    );
+    const graph = buildStructuralGraph({ catalog, knowledge });
+    this.structuralGraphCache.set(root.uri, graph);
+    return graph;
+  }
+
+  async retrieveStructuralContext(
+    activeEditor: ActiveEditorContext | undefined,
+    query: string,
+    limit = 8
+  ): Promise<readonly StructuralRetrievalItem[]> {
+    const resolution = await this.adapter.resolveProjectRoot(activeEditor);
+    if (!resolution) {
+      return [];
+    }
+
+    const graph = await this.getStructuralGraph(activeEditor);
+    if (!graph) {
+      return [];
+    }
+
+    return retrieveStructuralContext(graph, {
+      activeFile: resolution.activeFile,
+      query,
+      limit
+    });
   }
 
   async clearPersistentData(activeEditor: ActiveEditorContext | undefined): Promise<boolean> {
@@ -266,6 +347,7 @@ export class ProjectIntelligenceService {
     const cleared = await this.persistenceService.clearProjectData(resolution.projectRoot);
     if (cleared) {
       this.persistenceState.delete(resolution.projectRoot.uri);
+      this.structuralGraphCache.delete(resolution.projectRoot.uri);
     }
     return cleared;
   }
@@ -297,6 +379,7 @@ export class ProjectIntelligenceService {
     const activeFile = resolution.activeFile;
 
     if (change === "change") {
+      this.structuralGraphCache.delete(root.uri);
       if (activeFile && this.persistenceService) {
         void this.persistenceService.deleteFileKnowledge(root, activeFile);
       }
@@ -309,6 +392,7 @@ export class ProjectIntelligenceService {
       return root;
     }
 
+    this.structuralGraphCache.delete(root.uri);
     const generation = this.cache.begin(root);
     const index = updateProjectIndexSourcePath(cached.index, activeFile, change);
     if (change === "delete" && this.persistenceService) {
@@ -329,12 +413,14 @@ export class ProjectIntelligenceService {
     if (this.persistenceService) {
       void this.persistenceService.clearFileKnowledge(resolution.projectRoot);
     }
+    this.structuralGraphCache.delete(resolution.projectRoot.uri);
     this.invalidateRoot(resolution.projectRoot.uri);
     return resolution.projectRoot;
   }
 
   invalidateRoot(rootUri: string): void {
     this.cache.invalidate(rootUri);
+    this.structuralGraphCache.delete(rootUri);
     this.gitCache.delete(rootUri);
     this.gitGenerations.set(rootUri, (this.gitGenerations.get(rootUri) ?? 0) + 1);
   }
@@ -379,6 +465,7 @@ export class ProjectIntelligenceService {
         if (restored && projectMetadataSignature(restored) !== projectMetadataSignature(index)) {
           await this.persistenceService.clearFileKnowledge(root);
         }
+        this.structuralGraphCache.delete(root.uri);
         await this.persistenceService.saveProjectCatalog(root, index);
       }
     } catch {
