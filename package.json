@@ -2,7 +2,7 @@
   "name": "codingsensei",
   "displayName": "CodingSensei",
   "description": "A local-first VS Code learning companion that helps you learn to code by coding.",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "license": "Apache-2.0",
   "publisher": "codingsensei-local",
