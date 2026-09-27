@@ -16,14 +16,8 @@ import { ProjectIndexCache } from "./projectCache";
 import { createProjectCatalog, restoreProjectIndexFromCatalog } from "./projectCatalog";
 import { hashContent, restoreLanguageAnalysisFromKnowledge } from "./projectKnowledge";
 import type { ProjectPersistenceService } from "./projectPersistence";
-import {
-  buildStructuralGraph,
-  type StructuralGraph
-} from "./structuralGraph";
-import {
-  retrieveStructuralContext,
-  type StructuralRetrievalItem
-} from "./structuralRetrieval";
+import { buildStructuralGraph, type StructuralGraph } from "./structuralGraph";
+import { retrieveStructuralContext, type StructuralRetrievalItem } from "./structuralRetrieval";
 import { dirname, extension, fileName, normalizePath } from "./pathUtils";
 import {
   isPathInsideProject,
@@ -322,7 +316,13 @@ export class ProjectIntelligenceService {
       if (!source) {
         skipped += 1;
         processed += 1;
-        options.onProgress?.({ processed, total: paths.length, indexed, reused, skipped });
+        options.onProgress?.({
+          processed,
+          total: paths.length,
+          indexed,
+          reused,
+          skipped
+        });
         continue;
       }
 
@@ -334,7 +334,13 @@ export class ProjectIntelligenceService {
       ) {
         reused += 1;
         processed += 1;
-        options.onProgress?.({ processed, total: paths.length, indexed, reused, skipped });
+        options.onProgress?.({
+          processed,
+          total: paths.length,
+          indexed,
+          reused,
+          skipped
+        });
         continue;
       }
 
@@ -366,7 +372,13 @@ export class ProjectIntelligenceService {
         skipped += 1;
       }
       processed += 1;
-      options.onProgress?.({ processed, total: paths.length, indexed, reused, skipped });
+      options.onProgress?.({
+        processed,
+        total: paths.length,
+        indexed,
+        reused,
+        skipped
+      });
     }
 
     this.structuralGraphCache.delete(root.uri);
