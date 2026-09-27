@@ -224,7 +224,6 @@ describe("project persistence service", () => {
     expect(await service.loadFileKnowledge(root, "src/app.ts")).toBeUndefined();
   });
 
-
   it("clears persisted file knowledge without removing the project catalog", async () => {
     const memory = createMemoryAdapter();
     const service = new ProjectPersistenceService(memory.adapter, {
