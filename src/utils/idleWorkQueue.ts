@@ -56,7 +56,7 @@ export class IdleWorkQueue<T> {
       return;
     }
 
-    const next = this.items.entries().next().value as [string, T] | undefined;
+    const next = this.items.entries().next().value;
     if (!next) {
       return;
     }
