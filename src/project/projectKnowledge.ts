@@ -203,6 +203,7 @@ function isLanguageRelationships(value: unknown): value is LanguageRelationship[
         (item.targetFile === undefined || typeof item.targetFile === "string") &&
         (item.symbol === undefined || typeof item.symbol === "string") &&
         (item.sourceSymbol === undefined || typeof item.sourceSymbol === "string") &&
+        (item.qualifier === undefined || typeof item.qualifier === "string") &&
         (item.providerDerived === undefined || typeof item.providerDerived === "boolean") &&
         typeof item.confidence === "string" &&
         confidence.has(item.confidence as LanguageRelationship["confidence"]) &&
