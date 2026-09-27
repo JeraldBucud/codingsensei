@@ -253,7 +253,6 @@ describe("project persistence service", () => {
     expect(await service.loadFileKnowledge(root, "src/app.ts")).toBeUndefined();
   });
 
-
   it("loads project knowledge in bounded path order", async () => {
     const memory = createMemoryAdapter();
     const service = new ProjectPersistenceService(memory.adapter, {
