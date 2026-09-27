@@ -89,6 +89,7 @@ export function buildStructuralGraph(input: {
   const edges = new Map<string, StructuralEdge>();
   const indexedFiles = new Set(knowledgeByFile.keys());
   const symbolOwners = new Map<string, Set<string>>();
+  const symbolNodes = new Map<string, StructuralSymbolNode[]>();
 
   for (const record of knowledgeByFile.values()) {
     const file = normalizePath(record.relativePath);
@@ -99,6 +100,10 @@ export function buildStructuralGraph(input: {
       const owners = symbolOwners.get(symbol.name) ?? new Set<string>();
       owners.add(file);
       symbolOwners.set(symbol.name, owners);
+      const symbolKey = fileSymbolKey(file, symbol.name);
+      const matchingNodes = symbolNodes.get(symbolKey) ?? [];
+      matchingNodes.push(node);
+      symbolNodes.set(symbolKey, matchingNodes);
       addEdge(edges, {
         id: edgeId("contains", fileNodeId(file), node.id),
         type: "contains",
@@ -115,7 +120,14 @@ export function buildStructuralGraph(input: {
   for (const record of knowledgeByFile.values()) {
     const file = normalizePath(record.relativePath);
     for (const relationship of [...record.imports, ...record.relationships]) {
-      addRelationshipEdge(edges, relationship, file, knownFiles, symbolOwners);
+      addRelationshipEdge(
+        edges,
+        relationship,
+        file,
+        knownFiles,
+        symbolOwners,
+        symbolNodes
+      );
     }
   }
 
@@ -201,7 +213,8 @@ function addRelationshipEdge(
   relationship: LanguageRelationship,
   sourceFile: string,
   knownFiles: ReadonlySet<string>,
-  symbolOwners: ReadonlyMap<string, ReadonlySet<string>>
+  symbolOwners: ReadonlyMap<string, ReadonlySet<string>>,
+  symbolNodes: ReadonlyMap<string, readonly StructuralSymbolNode[]>
 ): void {
   if (relationship.providerDerived) {
     return;
@@ -221,8 +234,16 @@ function addRelationshipEdge(
     return;
   }
 
-  const from = fileNodeId(sourceFile);
-  const to = fileNodeId(targetFile);
+  const from =
+    relationship.type === "call" && relationship.sourceSymbol
+      ? uniqueSymbolNodeId(sourceFile, relationship.sourceSymbol, symbolNodes) ??
+        fileNodeId(sourceFile)
+      : fileNodeId(sourceFile);
+  const to =
+    relationship.type === "call" && relationship.symbol
+      ? uniqueSymbolNodeId(targetFile, relationship.symbol, symbolNodes) ??
+        fileNodeId(targetFile)
+      : fileNodeId(targetFile);
   addEdge(edges, {
     id: edgeId(type, from, to),
     type,
@@ -254,6 +275,19 @@ function edgeTypeForRelationship(
     default:
       return undefined;
   }
+}
+
+function fileSymbolKey(file: string, symbol: string): string {
+  return `${normalizePath(file)}\u0000${symbol}`;
+}
+
+function uniqueSymbolNodeId(
+  file: string,
+  symbol: string,
+  symbolNodes: ReadonlyMap<string, readonly StructuralSymbolNode[]>
+): string | undefined {
+  const matches = symbolNodes.get(fileSymbolKey(file, symbol)) ?? [];
+  return matches.length === 1 ? matches[0]?.id : undefined;
 }
 
 function uniqueSymbolOwner(
