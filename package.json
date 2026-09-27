@@ -123,7 +123,7 @@
     "check": "pnpm build && pnpm lint && pnpm format:check && pnpm test",
     "dev": "node esbuild.mjs --watch",
     "format": "prettier --write .",
-    "format:check": "prettier --check .",
+    "format:check": "prettier --check . || (prettier --write . && git diff -- . && false)",
     "lint": "eslint .",
     "test": "vitest run tests",
     "typecheck": "tsc --noEmit"
