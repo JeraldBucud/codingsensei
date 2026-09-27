@@ -147,7 +147,7 @@
     "check": "pnpm build && pnpm lint && pnpm format:check && pnpm test",
     "dev": "node esbuild.mjs --watch",
     "format": "prettier --write .",
-    "format:check": "prettier --check . || (prettier --write src/commands/registerCommands.ts src/language/relationships.ts src/project/architectureInsights.ts src/project/projectEvidence.ts src/project/projectIntelligence.ts src/project/structuralGraph.ts src/project/structuralRetrieval.ts tests/architectureInsights.test.ts tests/languageIntelligence.test.ts && git diff -- src/commands/registerCommands.ts src/language/relationships.ts src/project/architectureInsights.ts src/project/projectEvidence.ts src/project/projectIntelligence.ts src/project/structuralGraph.ts src/project/structuralRetrieval.ts tests/architectureInsights.test.ts tests/languageIntelligence.test.ts && false)",
+    "format:check": "prettier --check . || (prettier --write src/commands/registerCommands.ts src/language/relationships.ts src/project/architectureInsights.ts src/project/projectEvidence.ts src/project/projectIntelligence.ts src/project/structuralGraph.ts src/project/structuralRetrieval.ts tests/architectureInsights.test.ts tests/languageIntelligence.test.ts tests/structuralGraph.test.ts && git diff -- src/commands/registerCommands.ts src/language/relationships.ts src/project/architectureInsights.ts src/project/projectEvidence.ts src/project/projectIntelligence.ts src/project/structuralGraph.ts src/project/structuralRetrieval.ts tests/architectureInsights.test.ts tests/languageIntelligence.test.ts tests/structuralGraph.test.ts && false)",
     "lint": "eslint .",
     "test": "vitest run tests",
     "typecheck": "tsc --noEmit"
