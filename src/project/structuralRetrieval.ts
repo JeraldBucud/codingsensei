@@ -71,7 +71,12 @@ function scoreStructuralNeighbors(
     if (edge.from === activeNode) {
       addScore(scores, edge.toFile, edgeWeight(edge), relationshipReason(edge, "outgoing"));
     } else if (edge.to === activeNode) {
-      addScore(scores, edge.fromFile, Math.max(1, edgeWeight(edge) - 1), relationshipReason(edge, "incoming"));
+      addScore(
+        scores,
+        edge.fromFile,
+        Math.max(1, edgeWeight(edge) - 1),
+        relationshipReason(edge, "incoming")
+      );
     }
   }
 }
