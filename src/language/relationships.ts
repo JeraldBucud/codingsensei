@@ -198,12 +198,20 @@ function collectCallRelationships(
     const endLine = Math.min(source.range.endLine, source.range.startLine + 500);
     for (let lineNumber = source.range.startLine; lineNumber <= endLine; lineNumber += 1) {
       const line = lines[lineNumber] ?? "";
-      const memberCalls = /\b[A-Za-z_$][\w$]*\.([A-Za-z_$][\w$]*)\s*\(/g;
+      const memberCalls = /\b([A-Za-z_$][\w$]*)\.([A-Za-z_$][\w$]*)\s*\(/g;
       let memberMatch: RegExpExecArray | null;
       while ((memberMatch = memberCalls.exec(line)) !== null) {
-        const target = memberMatch[1];
-        if (target) {
-          addCallRelationship(source, target, ignoredCalls, seen, relationships);
+        const qualifier = memberMatch[1];
+        const target = memberMatch[2];
+        if (qualifier && target) {
+          addCallRelationship(
+            source,
+            target,
+            qualifier,
+            ignoredCalls,
+            seen,
+            relationships
+          );
         }
       }
 
@@ -218,7 +226,7 @@ function collectCallRelationships(
         if (lineNumber === source.range.startLine && target === source.name) {
           continue;
         }
-        addCallRelationship(source, target, ignoredCalls, seen, relationships);
+        addCallRelationship(source, target, undefined, ignoredCalls, seen, relationships);
       }
     }
   }
@@ -227,6 +235,7 @@ function collectCallRelationships(
 function addCallRelationship(
   source: LanguageSymbol,
   target: string,
+  qualifier: string | undefined,
   ignoredCalls: ReadonlySet<string>,
   seen: Set<string>,
   relationships: LanguageRelationship[]
@@ -234,7 +243,7 @@ function addCallRelationship(
   if (ignoredCalls.has(target) || target === source.name) {
     return;
   }
-  const key = `${source.name}->${target}`;
+  const key = `${source.name}->${qualifier ? `${qualifier}.` : ""}${target}`;
   if (seen.has(key)) {
     return;
   }
@@ -244,8 +253,9 @@ function addCallRelationship(
     target,
     symbol: target,
     sourceSymbol: source.name,
+    qualifier,
     confidence: "medium",
-    reason: `The symbol ${source.name} calls ${target}.`
+    reason: `The symbol ${source.name} calls ${qualifier ? `${qualifier}.` : ""}${target}.`
   });
 }
 
