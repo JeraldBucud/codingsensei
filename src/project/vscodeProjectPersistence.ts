@@ -108,10 +108,7 @@ function projectIdentityUri(root: WorkspaceRoot): vscode.Uri {
   );
 }
 
-function projectStorageDirectory(
-  globalStorageUri: vscode.Uri,
-  projectId: string
-): vscode.Uri {
+function projectStorageDirectory(globalStorageUri: vscode.Uri, projectId: string): vscode.Uri {
   return vscode.Uri.joinPath(globalStorageUri, "projects", projectId);
 }
 
