@@ -94,6 +94,7 @@ describe("structural retrieval", () => {
 
     expect(results[0]?.file).toBe("src/UserService.ts");
     expect(results[0]?.matchedSymbols).toContain("UserService");
+    expect(results[0]?.line).toBe(0);
   });
 
   it("combines query and active-file evidence deterministically", () => {
