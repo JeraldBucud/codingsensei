@@ -1,9 +1,5 @@
 import { fileName, normalizePath } from "./pathUtils";
-import type {
-  StructuralEdge,
-  StructuralGraph,
-  StructuralSymbolNode
-} from "./structuralGraph";
+import type { StructuralEdge, StructuralGraph, StructuralSymbolNode } from "./structuralGraph";
 
 export interface StructuralRetrievalItem {
   readonly file: string;
