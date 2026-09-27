@@ -340,7 +340,6 @@ describe("project intelligence service", () => {
     expect(backend.snapshot?.sourceFileCount).toBe(1);
   });
 
-
   it("restores a persisted structural catalog before background validation completes", async () => {
     const memory = createMemoryAdapter({
       activeFile: "src/app.ts",
