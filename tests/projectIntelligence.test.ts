@@ -490,7 +490,6 @@ describe("project intelligence service", () => {
     });
   });
 
-
   it("keeps deep indexing bounded and reports truncation", async () => {
     const memory = createMemoryAdapter({
       activeFile: "src/auth.ts",
