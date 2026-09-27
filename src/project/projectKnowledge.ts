@@ -63,6 +63,25 @@ export function createPersistentFileKnowledge(input: {
   };
 }
 
+export function restoreLanguageAnalysisFromKnowledge(
+  knowledge: PersistentFileKnowledge
+): LanguageAnalysis {
+  return {
+    status: "partial",
+    file: knowledge.relativePath,
+    languageId: knowledge.languageId,
+    source: knowledge.analysisSource,
+    symbols: knowledge.symbols.map((symbol) => ({ ...symbol })),
+    imports: knowledge.imports.map((relationship) => ({ ...relationship })),
+    relationships: knowledge.relationships
+      .filter((relationship) => !relationship.providerDerived)
+      .map((relationship) => ({ ...relationship })),
+    entryPointSignals: [...knowledge.entryPointSignals],
+    truncated: knowledge.truncated,
+    message: "Restored from persistent local project knowledge."
+  };
+}
+
 export function projectKnowledgeKey(relativePath: string): string {
   return createHash("sha256").update(normalizePath(relativePath)).digest("hex");
 }
