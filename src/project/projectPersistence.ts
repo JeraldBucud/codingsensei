@@ -1,12 +1,19 @@
 import type { ProjectPersistenceSummary, WorkspaceRoot } from "../core/models";
+import type { FrameworkDetection } from "../framework/models";
+import type { LanguageAnalysis, LanguageDocumentInput } from "../language/models";
 import {
   createProjectCatalog,
   parseProjectCatalog,
   serializeProjectCatalog,
   type PersistentProjectCatalog
 } from "./projectCatalog";
-import type { FrameworkDetection } from "../framework/models";
-import type { LanguageAnalysis, LanguageDocumentInput } from "../language/models";
+import {
+  createProjectIdentity,
+  parseProjectIdentity,
+  serializeProjectIdentity,
+  type ProjectIdentity,
+  type ProjectIdentityFactory
+} from "./projectIdentity";
 import {
   createPersistentFileKnowledge,
   parsePersistentFileKnowledge,
@@ -15,13 +22,6 @@ import {
   type PersistentFileKnowledge
 } from "./projectKnowledge";
 import type { ProjectIndex } from "./projectScanner";
-import {
-  createProjectIdentity,
-  parseProjectIdentity,
-  serializeProjectIdentity,
-  type ProjectIdentity,
-  type ProjectIdentityFactory
-} from "./projectIdentity";
 
 export const projectStorageSchemaVersion = 1 as const;
 
@@ -132,8 +132,7 @@ export class ProjectPersistenceService {
       return false;
     }
 
-    const relativePath =
-      document.projectRelativePath ?? document.relativePath ?? document.fileName;
+    const relativePath = document.projectRelativePath ?? document.relativePath ?? document.fileName;
     try {
       const knowledge = createPersistentFileKnowledge({
         projectId: state.projectId,
@@ -184,10 +183,7 @@ export class ProjectPersistenceService {
     }
 
     try {
-      await this.adapter.deleteProjectKnowledge(
-        state.projectId,
-        projectKnowledgeKey(relativePath)
-      );
+      await this.adapter.deleteProjectKnowledge(state.projectId, projectKnowledgeKey(relativePath));
       return true;
     } catch {
       return false;
