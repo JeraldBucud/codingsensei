@@ -12,6 +12,7 @@ export type StructuralEdgeType =
   | "service-dependency"
   | "definition"
   | "reference"
+  | "calls"
   | "related-test";
 
 export interface StructuralFileNode {
@@ -67,6 +68,7 @@ export function buildStructuralGraph(input: {
   }));
   const edges = new Map<string, StructuralEdge>();
   const indexedFiles = new Set<string>();
+  const symbolOwners = new Map<string, Set<string>>();
 
   for (const record of input.knowledge) {
     const file = normalizePath(record.relativePath);
@@ -78,6 +80,9 @@ export function buildStructuralGraph(input: {
     for (const symbol of record.symbols) {
       const node = toSymbolNode(file, symbol);
       nodes.push(node);
+      const owners = symbolOwners.get(symbol.name) ?? new Set<string>();
+      owners.add(file);
+      symbolOwners.set(symbol.name, owners);
       addEdge(edges, {
         id: edgeId("contains", fileNodeId(file), node.id),
         type: "contains",
@@ -89,8 +94,15 @@ export function buildStructuralGraph(input: {
       });
     }
 
+  }
+
+  for (const record of input.knowledge) {
+    const file = normalizePath(record.relativePath);
+    if (!knownFiles.has(file)) {
+      continue;
+    }
     for (const relationship of [...record.imports, ...record.relationships]) {
-      addRelationshipEdge(edges, relationship, file, knownFiles);
+      addRelationshipEdge(edges, relationship, file, knownFiles, symbolOwners);
     }
   }
 
@@ -175,14 +187,19 @@ function addRelationshipEdge(
   edges: Map<string, StructuralEdge>,
   relationship: LanguageRelationship,
   sourceFile: string,
-  knownFiles: ReadonlySet<string>
+  knownFiles: ReadonlySet<string>,
+  symbolOwners: ReadonlyMap<string, ReadonlySet<string>>
 ): void {
-  if (relationship.providerDerived || !relationship.targetFile) {
+  if (relationship.providerDerived) {
     return;
   }
 
-  const targetFile = normalizePath(relationship.targetFile);
-  if (!knownFiles.has(targetFile) || targetFile === sourceFile) {
+  const targetFile = relationship.targetFile
+    ? normalizePath(relationship.targetFile)
+    : relationship.type === "call" && relationship.symbol
+      ? uniqueSymbolOwner(relationship.symbol, sourceFile, symbolOwners)
+      : undefined;
+  if (!targetFile || !knownFiles.has(targetFile) || targetFile === sourceFile) {
     return;
   }
 
@@ -219,9 +236,20 @@ function edgeTypeForRelationship(
       return "definition";
     case "reference":
       return "reference";
+    case "call":
+      return "calls";
     default:
       return undefined;
   }
+}
+
+function uniqueSymbolOwner(
+  symbol: string,
+  sourceFile: string,
+  symbolOwners: ReadonlyMap<string, ReadonlySet<string>>
+): string | undefined {
+  const owners = [...(symbolOwners.get(symbol) ?? [])].filter((file) => file !== sourceFile);
+  return owners.length === 1 ? owners[0] : undefined;
 }
 
 function addEdge(edges: Map<string, StructuralEdge>, edge: StructuralEdge): void {
