@@ -91,9 +91,7 @@ describe("persistent file knowledge", () => {
       knowledge
     );
     expect(
-      parsePersistentFileKnowledge(
-        JSON.stringify({ ...knowledge, schemaVersion: 99 })
-      )
+      parsePersistentFileKnowledge(JSON.stringify({ ...knowledge, schemaVersion: 99 }))
     ).toBeUndefined();
   });
 });
