@@ -85,6 +85,11 @@ export class LanguageIntelligenceService {
     }
   }
 
+  prime(document: LanguageDocumentInput, analysis: LanguageAnalysis): LanguageAnalysis {
+    this.setCache(document.uri, document.version, analysis);
+    return projectAnalysisForCursor(analysis, document.cursor);
+  }
+
   invalidate(uri: string): void {
     this.cache.delete(uri);
   }
