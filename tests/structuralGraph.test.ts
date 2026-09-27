@@ -72,6 +72,16 @@ describe("structural graph", () => {
               confidence: "high",
               reason: "Resolved local import."
             }
+          ],
+          relationships: [
+            {
+              type: "call",
+              target: "UserService",
+              symbol: "UserService",
+              sourceSymbol: "App",
+              confidence: "medium",
+              reason: "App calls UserService."
+            }
           ]
         }),
         knowledge({
@@ -95,6 +105,14 @@ describe("structural graph", () => {
       graph.edges.some(
         (edge) =>
           edge.type === "imports" &&
+          edge.fromFile === "src/App.tsx" &&
+          edge.toFile === "src/UserService.ts"
+      )
+    ).toBe(true);
+    expect(
+      graph.edges.some(
+        (edge) =>
+          edge.type === "calls" &&
           edge.fromFile === "src/App.tsx" &&
           edge.toFile === "src/UserService.ts"
       )
