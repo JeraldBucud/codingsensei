@@ -253,6 +253,47 @@ describe("project persistence service", () => {
     expect(await service.loadFileKnowledge(root, "src/app.ts")).toBeUndefined();
   });
 
+  it("loads project knowledge in bounded path order", async () => {
+    const memory = createMemoryAdapter();
+    const service = new ProjectPersistenceService(memory.adapter, {
+      createId: () => projectId,
+      now: () => new Date("2026-09-27T02:00:00.000Z")
+    });
+    const analysis: LanguageAnalysis = {
+      status: "available",
+      file: "src/app.ts",
+      languageId: "typescript",
+      source: "deterministic",
+      symbols: [],
+      imports: [],
+      relationships: [],
+      entryPointSignals: [],
+      truncated: false
+    };
+
+    for (const relativePath of ["src/a.ts", "src/b.ts", "src/c.ts"]) {
+      await service.saveFileKnowledge(
+        root,
+        {
+          fileName: relativePath.split("/").at(-1) ?? relativePath,
+          projectRelativePath: relativePath,
+          languageId: "typescript",
+          text: `export const value = "${relativePath}";`
+        },
+        analysis,
+        []
+      );
+    }
+
+    const loaded = await service.loadProjectKnowledge(
+      root,
+      ["src/a.ts", "src/b.ts", "src/c.ts"],
+      2
+    );
+
+    expect(loaded.map((record) => record.relativePath)).toEqual(["src/a.ts", "src/b.ts"]);
+  });
+
   it("clears persisted file knowledge without removing the project catalog", async () => {
     const memory = createMemoryAdapter();
     const service = new ProjectPersistenceService(memory.adapter, {

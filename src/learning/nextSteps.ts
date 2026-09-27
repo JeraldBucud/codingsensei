@@ -195,6 +195,8 @@ function relationshipTitle(
       return "Inspect the definition";
     case "reference":
       return "Trace the reference";
+    case "call":
+      return "Trace the function call";
     case "contains":
       return "Inspect the contained symbol";
   }

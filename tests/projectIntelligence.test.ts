@@ -138,6 +138,26 @@ function createMemoryAdapter(input: MemoryWorkspaceInput): {
             }))
         );
       },
+      readSourceDocument: (root, relativePath) => {
+        const languageId = relativePath.endsWith(".py")
+          ? "python"
+          : relativePath.endsWith(".java")
+            ? "java"
+            : relativePath.endsWith(".tsx")
+              ? "typescriptreact"
+              : "typescript";
+        const text = relativePath.endsWith("auth.ts")
+          ? 'import { other } from "./other";\nexport function auth() { return other(); }'
+          : relativePath.endsWith("auth.test.ts")
+            ? 'import { auth } from "./auth";\nexport function testAuth() { return auth(); }'
+            : "export function other() { return true; }";
+        return Promise.resolve({
+          uri: `${root.uri}/${relativePath}`,
+          fileName: relativePath.split("/").at(-1) ?? relativePath,
+          languageId,
+          text
+        });
+      },
       readGitState: (_root, activeProjectFile): Promise<GitProjectState> => {
         gitReads += 1;
         return Promise.resolve(gitState(activeProjectFile));
@@ -197,6 +217,66 @@ function createMemoryPersistenceService(
   return new ProjectPersistenceService(adapter, {
     now: () => new Date("2026-09-27T08:00:00.000Z")
   });
+}
+
+function createWritablePersistenceService(
+  root: WorkspaceRoot,
+  sourceFiles: readonly string[]
+): {
+  readonly service: ProjectPersistenceService;
+  readonly knowledge: Map<string, string>;
+} {
+  const projectId = "2c0df18a-8ac2-4b68-84e3-0b6f2c3d6d41";
+  const identity = JSON.stringify({
+    schemaVersion: 1,
+    projectId,
+    createdAt: "2026-09-27T08:00:00.000Z"
+  });
+  const catalog = serializeProjectCatalog(
+    createProjectCatalog(
+      projectId,
+      buildProjectIndex({
+        root,
+        sourceFiles: sourceFiles.map((relativePath) => ({ relativePath })),
+        metadataFiles: [{ relativePath: "package.json", content: "{}" }],
+        scanLimit: 2500,
+        scanTruncated: false
+      }),
+      () => new Date("2026-09-27T08:00:00.000Z")
+    )
+  );
+  const knowledge = new Map<string, string>();
+  const adapter: ProjectPersistenceAdapter = {
+    readProjectIdentity: () => Promise.resolve(identity),
+    writeProjectIdentity: () => Promise.resolve(),
+    writeProjectManifest: () => Promise.resolve(),
+    readProjectCatalog: () => Promise.resolve(catalog),
+    writeProjectCatalog: () => Promise.resolve(),
+    readProjectKnowledge: (id, key) => Promise.resolve(knowledge.get(`${id}:${key}`)),
+    writeProjectKnowledge: (id, key, content) => {
+      knowledge.set(`${id}:${key}`, content);
+      return Promise.resolve();
+    },
+    deleteProjectKnowledge: (id, key) => {
+      knowledge.delete(`${id}:${key}`);
+      return Promise.resolve();
+    },
+    deleteAllProjectKnowledge: (id) => {
+      for (const key of [...knowledge.keys()]) {
+        if (key.startsWith(`${id}:`)) {
+          knowledge.delete(key);
+        }
+      }
+      return Promise.resolve();
+    },
+    deleteProjectStorage: () => Promise.resolve()
+  };
+  return {
+    service: new ProjectPersistenceService(adapter, {
+      now: () => new Date("2026-09-27T08:00:00.000Z")
+    }),
+    knowledge
+  };
 }
 
 describe("project intelligence service", () => {
@@ -362,6 +442,114 @@ describe("project intelligence service", () => {
     expect(analysis.snapshot?.codeFiles).toContain("src/persisted.ts");
     expect(analysis.snapshot?.sourceFileCount).toBe(2);
     expect(analysis.snapshot?.testFileCount).toBe(1);
+  });
+
+  it("deep indexes project files, builds a graph and reuses unchanged knowledge", async () => {
+    const memory = createMemoryAdapter({
+      activeFile: "src/auth.ts",
+      sourceFiles: ["src/auth.ts", "src/auth.test.ts", "src/other.ts"]
+    });
+    const persisted = createWritablePersistenceService(workspaceRoot, [
+      "src/auth.ts",
+      "src/auth.test.ts",
+      "src/other.ts"
+    ]);
+    const service = new ProjectIntelligenceService(memory.adapter, persisted.service);
+
+    await service.analyze(editor("src/auth.ts"), { force: false, refreshGit: false });
+    const first = await service.buildDeepProjectIntelligence(editor("src/auth.ts"));
+    const graph = await service.getStructuralGraph(editor("src/auth.ts"));
+    const results = await service.retrieveStructuralContext(editor("src/auth.ts"), "other", 5);
+    const second = await service.buildDeepProjectIntelligence(editor("src/auth.ts"));
+
+    expect(first).toMatchObject({
+      indexed: 3,
+      reused: 0,
+      skipped: 0,
+      cancelled: false,
+      truncated: false
+    });
+    expect(persisted.knowledge.size).toBe(3);
+    expect(graph).toMatchObject({
+      totalFileCount: 3,
+      indexedFileCount: 3
+    });
+    expect(
+      graph?.edges.some(
+        (edge) =>
+          edge.type === "imports" &&
+          edge.fromFile === "src/auth.ts" &&
+          edge.toFile === "src/other.ts"
+      )
+    ).toBe(true);
+    expect(results[0]?.file).toBe("src/other.ts");
+    expect(second).toMatchObject({
+      indexed: 0,
+      reused: 3,
+      skipped: 0
+    });
+  });
+
+  it("keeps deep indexing bounded and reports truncation", async () => {
+    const memory = createMemoryAdapter({
+      activeFile: "src/auth.ts",
+      sourceFiles: ["src/auth.ts", "src/auth.test.ts", "src/other.ts"]
+    });
+    const persisted = createWritablePersistenceService(workspaceRoot, [
+      "src/auth.ts",
+      "src/auth.test.ts",
+      "src/other.ts"
+    ]);
+    const service = new ProjectIntelligenceService(memory.adapter, persisted.service);
+
+    await service.analyze(editor("src/auth.ts"), { force: false, refreshGit: false });
+    const summary = await service.buildDeepProjectIntelligence(editor("src/auth.ts"), {
+      limit: 2
+    });
+
+    expect(summary).toMatchObject({
+      processed: 2,
+      total: 2,
+      indexed: 2,
+      reused: 0,
+      skipped: 0,
+      cancelled: false,
+      truncated: true
+    });
+    expect(persisted.knowledge.size).toBe(2);
+  });
+
+  it("supports cancellation between files while preserving completed knowledge", async () => {
+    const memory = createMemoryAdapter({
+      activeFile: "src/auth.ts",
+      sourceFiles: ["src/auth.ts", "src/auth.test.ts", "src/other.ts"]
+    });
+    const persisted = createWritablePersistenceService(workspaceRoot, [
+      "src/auth.ts",
+      "src/auth.test.ts",
+      "src/other.ts"
+    ]);
+    const service = new ProjectIntelligenceService(memory.adapter, persisted.service);
+    let cancel = false;
+
+    await service.analyze(editor("src/auth.ts"), { force: false, refreshGit: false });
+    const summary = await service.buildDeepProjectIntelligence(editor("src/auth.ts"), {
+      shouldCancel: () => cancel,
+      onProgress: (progress) => {
+        if (progress.processed >= 1) {
+          cancel = true;
+        }
+      }
+    });
+
+    expect(summary).toMatchObject({
+      processed: 1,
+      total: 3,
+      indexed: 1,
+      cancelled: true,
+      truncated: false
+    });
+    expect(persisted.knowledge.size).toBe(1);
   });
 
   it("refreshes Git on save without structurally rescanning", async () => {
