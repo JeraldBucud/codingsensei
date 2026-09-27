@@ -48,6 +48,7 @@ const scanLimit = 2500;
 const metadataReadLimitBytes = 128 * 1024;
 const backgroundSourceReadLimitBytes = 256 * 1024;
 const maxStructuralKnowledgeFiles = 1000;
+const maxDeepIndexFiles = 1000;
 const sourceIncludePattern = "**/*.{ts,tsx,js,jsx,mts,cts,mjs,cjs,py,java}";
 const excludePattern =
   "**/{.git,node_modules,dist,build,out,target,coverage,.next,.venv,venv,__pycache__,vendor,generated}/**";
@@ -75,6 +76,19 @@ export interface ProjectWorkspaceAdapter {
 export interface RestoredLanguageKnowledge {
   readonly analysis: LanguageAnalysis;
   readonly frameworks: readonly FrameworkDetection[];
+}
+
+export interface DeepProjectIndexProgress {
+  readonly processed: number;
+  readonly total: number;
+  readonly indexed: number;
+  readonly reused: number;
+  readonly skipped: number;
+}
+
+export interface DeepProjectIndexSummary extends DeepProjectIndexProgress {
+  readonly cancelled: boolean;
+  readonly truncated: boolean;
 }
 
 export class ProjectIntelligenceService {
@@ -249,7 +263,122 @@ export class ProjectIntelligenceService {
       metadataPackageNames: cached?.index.metadata.packageNames
     });
 
-    return this.persistenceService.saveFileKnowledge(root, document, analysis, frameworks);
+    const saved = await this.persistenceService.saveFileKnowledge(
+      root,
+      document,
+      analysis,
+      frameworks
+    );
+    if (saved) {
+      this.structuralGraphCache.delete(root.uri);
+    }
+    return saved;
+  }
+
+  async buildDeepProjectIntelligence(
+    activeEditor: ActiveEditorContext | undefined,
+    options: {
+      readonly limit?: number;
+      readonly shouldCancel?: () => boolean;
+      readonly onProgress?: (progress: DeepProjectIndexProgress) => void;
+    } = {}
+  ): Promise<DeepProjectIndexSummary | undefined> {
+    if (!this.persistenceService || !this.adapter.readSourceDocument) {
+      return undefined;
+    }
+
+    const resolution = await this.adapter.resolveProjectRoot(activeEditor);
+    if (!resolution) {
+      return undefined;
+    }
+
+    const root = resolution.projectRoot;
+    await this.ensurePersistence(root);
+
+    let index = this.cache.get(root.uri)?.index;
+    if (!index) {
+      await this.analyze(activeEditor, { force: false, refreshGit: false });
+      index = this.cache.get(root.uri)?.index;
+    }
+    if (!index) {
+      return undefined;
+    }
+
+    const limit = Math.max(1, Math.min(options.limit ?? maxDeepIndexFiles, maxDeepIndexFiles));
+    const paths = index.codeFiles.slice(0, limit);
+    let processed = 0;
+    let indexed = 0;
+    let reused = 0;
+    let skipped = 0;
+    let cancelled = false;
+
+    for (const relativePath of paths) {
+      if (options.shouldCancel?.()) {
+        cancelled = true;
+        break;
+      }
+
+      const source = await this.adapter.readSourceDocument(root, relativePath);
+      if (!source) {
+        skipped += 1;
+        processed += 1;
+        options.onProgress?.({ processed, total: paths.length, indexed, reused, skipped });
+        continue;
+      }
+
+      const existing = await this.persistenceService.loadFileKnowledge(root, relativePath);
+      if (
+        existing &&
+        existing.languageId === source.languageId &&
+        existing.contentHash === hashContent(source.text)
+      ) {
+        reused += 1;
+        processed += 1;
+        options.onProgress?.({ processed, total: paths.length, indexed, reused, skipped });
+        continue;
+      }
+
+      const document: LanguageDocumentInput = {
+        ...source,
+        relativePath,
+        projectRootUri: root.uri,
+        projectRelativePath: relativePath,
+        knownProjectFiles: index.codeFiles,
+        version: 0
+      };
+      const analysis = await this.backgroundLanguageService.analyze(document, true);
+      const frameworks = detectFrameworks({
+        fileName: document.fileName,
+        relativePath: document.relativePath,
+        languageId: document.languageId,
+        text: document.text,
+        languageAnalysis: analysis,
+        manifestFiles: index.manifestFiles,
+        metadataPackageNames: index.metadata.packageNames
+      });
+
+      if (
+        analysis.status !== "unavailable" &&
+        (await this.persistenceService.saveFileKnowledge(root, document, analysis, frameworks))
+      ) {
+        indexed += 1;
+      } else {
+        skipped += 1;
+      }
+      processed += 1;
+      options.onProgress?.({ processed, total: paths.length, indexed, reused, skipped });
+    }
+
+    this.structuralGraphCache.delete(root.uri);
+    return {
+      processed,
+      total: paths.length,
+      indexed,
+      reused,
+      skipped,
+      cancelled,
+      truncated: index.codeFiles.length > paths.length
+    };
   }
 
   async saveLanguageKnowledge(
