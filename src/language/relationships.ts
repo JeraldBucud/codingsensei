@@ -38,7 +38,9 @@ export function analyzeDeterministicStructure(input: {
     }
   });
 
-  return { symbols: extendSymbolRanges(symbols, lines), imports, relationships, entryPointSignals };
+  const extendedSymbols = extendSymbolRanges(symbols, lines);
+  collectCallRelationships(lines, extendedSymbols, relationships);
+  return { symbols: extendedSymbols, imports, relationships, entryPointSignals };
 }
 
 function collectImports(line: string, imports: LanguageRelationship[]): void {
@@ -134,6 +136,94 @@ function collectRelationships(
       reason: "The active file declares an Express-style route."
     });
   }
+}
+
+
+function collectCallRelationships(
+  lines: readonly string[],
+  symbols: readonly LanguageSymbol[],
+  relationships: LanguageRelationship[]
+): void {
+  const callableKinds = new Set<LanguageSymbol["kind"]>([
+    "function",
+    "method",
+    "constructor"
+  ]);
+  const ignoredCalls = new Set([
+    "if",
+    "for",
+    "while",
+    "switch",
+    "catch",
+    "function",
+    "def",
+    "return",
+    "typeof",
+    "new",
+    "super",
+    "this",
+    "class",
+    "interface"
+  ]);
+  const seen = new Set<string>();
+
+  for (const source of symbols) {
+    if (!callableKinds.has(source.kind)) {
+      continue;
+    }
+
+    const endLine = Math.min(source.range.endLine, source.range.startLine + 500);
+    for (let lineNumber = source.range.startLine; lineNumber <= endLine; lineNumber += 1) {
+      const line = lines[lineNumber] ?? "";
+      const memberCalls = /\b[A-Za-z_$][\w$]*\.([A-Za-z_$][\w$]*)\s*\(/g;
+      let memberMatch: RegExpExecArray | null;
+      while ((memberMatch = memberCalls.exec(line)) !== null) {
+        const target = memberMatch[1];
+        if (target) {
+          addCallRelationship(source, target, ignoredCalls, seen, relationships);
+        }
+      }
+
+      const plainCalls = /\b([A-Za-z_$][\w$]*)\s*\(/g;
+      let plainMatch: RegExpExecArray | null;
+      while ((plainMatch = plainCalls.exec(line)) !== null) {
+        const target = plainMatch[1];
+        const previousCharacter = plainMatch.index > 0 ? line[plainMatch.index - 1] : "";
+        if (!target || previousCharacter === ".") {
+          continue;
+        }
+        if (lineNumber === source.range.startLine && target === source.name) {
+          continue;
+        }
+        addCallRelationship(source, target, ignoredCalls, seen, relationships);
+      }
+    }
+  }
+}
+
+function addCallRelationship(
+  source: LanguageSymbol,
+  target: string,
+  ignoredCalls: ReadonlySet<string>,
+  seen: Set<string>,
+  relationships: LanguageRelationship[]
+): void {
+  if (ignoredCalls.has(target) || target === source.name) {
+    return;
+  }
+  const key = `${source.name}->${target}`;
+  if (seen.has(key)) {
+    return;
+  }
+  seen.add(key);
+  relationships.push({
+    type: "call",
+    target,
+    symbol: target,
+    sourceSymbol: source.name,
+    confidence: "medium",
+    reason: `The symbol ${source.name} calls ${target}.`
+  });
 }
 
 function isJsxDocument(languageId: string, fileName: string): boolean {
