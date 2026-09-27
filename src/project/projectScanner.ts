@@ -128,6 +128,44 @@ export function buildProjectIndex(input: ProjectIndexInput): ProjectIndex {
   };
 }
 
+export function updateProjectIndexSourcePath(
+  index: ProjectIndex,
+  relativePath: string,
+  change: "create" | "delete"
+): ProjectIndex {
+  const normalized = normalizePath(relativePath);
+  if (!isSourceFile(normalized)) {
+    return index;
+  }
+
+  const codeFiles = new Set(index.codeFiles);
+  if (change === "create") {
+    codeFiles.add(normalized);
+  } else {
+    codeFiles.delete(normalized);
+  }
+
+  const nextCodeFiles = [...codeFiles].sort();
+  const testFiles = nextCodeFiles.filter(isTestFile);
+  const testSet = new Set(testFiles);
+  const sourceFiles = nextCodeFiles.filter((path) => !testSet.has(path));
+  const nonCodePaths = index.allPaths.filter((path) => !isSourceFile(path));
+  const allPaths = [...new Set([...nextCodeFiles, ...nonCodePaths])].sort();
+
+  return {
+    ...index,
+    allPaths,
+    codeFiles: nextCodeFiles,
+    sourceFiles,
+    testFiles,
+    ecosystems: detectEcosystems(allPaths),
+    sourceRoots: findLikelyRoots(sourceFiles, false),
+    testRoots: findLikelyRoots(testFiles, true),
+    sourceFileCount: sourceFiles.length,
+    testFileCount: testFiles.length
+  };
+}
+
 export function buildProjectSnapshot(input: ProjectSnapshotInput): ProjectSnapshot {
   return {
     root: input.index.root,

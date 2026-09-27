@@ -16,6 +16,10 @@ Complete. Added project-root discovery, cached local project intelligence, ecosy
 
 Complete. Added native-first active-file symbol awareness, bounded definition/reference relationships, deterministic fallback parsing, resolved local code relationships and evidence-based framework signals for React, Express, Django and Spring Boot.
 
+### Phase 3 — Persistent Project Intelligence (`0.4.0`)
+
+Complete. Added a versioned stable project identity in `.codingsensei/project.json`, self-ignored local metadata, project-specific VS Code extension storage, persistent structural catalogs, persistent per-file structural knowledge, restart restoration with content-hash validation, incremental create/change/delete maintenance, metadata-aware invalidation, idle changed-file re-indexing, and inspect/rebuild/clear management commands. Manual Windows Extension Development Host validation confirmed stable project identity across rebuild, clear and restart without dirtying the user's Git working tree.
+
 ---
 
 # V1 Target Scope

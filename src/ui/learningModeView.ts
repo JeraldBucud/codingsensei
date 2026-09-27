@@ -302,6 +302,10 @@ function renderProject(
       <span class="value">${escapeHtml(snapshot.root.name)}</span>
     </div>
     <div class="row">
+      <span class="label">Project identity</span>
+      <span class="value">${escapeHtml(projectPersistenceSummary(projectAnalysis))}</span>
+    </div>
+    <div class="row">
       <span class="label">Ecosystems</span>
       <span class="value">${escapeHtml(snapshot.ecosystems.join(", ") || "No supported ecosystem detected")}</span>
     </div>
@@ -342,6 +346,22 @@ function renderProject(
       <span class="value">${escapeHtml(codeRelationship ? `${codeRelationship.type}: ${codeRelationship.targetFile ?? codeRelationship.target}` : "No local code relationship detected")}</span>
     </div>
   </div>`;
+}
+
+function projectPersistenceSummary(projectAnalysis: ProjectAnalysis): string {
+  const persistence = projectAnalysis.persistence;
+  if (!persistence) {
+    return "Not initialized";
+  }
+  if (persistence.status === "unavailable") {
+    return persistence.message ? `Unavailable · ${persistence.message}` : "Unavailable";
+  }
+  if (!persistence.projectId) {
+    return "Persistent";
+  }
+
+  const shortId = persistence.projectId.slice(0, 8);
+  return `${persistence.identityCreated ? "Created" : "Persistent"} · ${shortId}`;
 }
 
 function languageStatusSummary(languageAnalysis: LanguageAnalysis): string {

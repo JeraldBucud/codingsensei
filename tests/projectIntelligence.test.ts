@@ -38,6 +38,12 @@ import {
   ProjectIntelligenceService,
   type ProjectWorkspaceAdapter
 } from "../src/project/projectIntelligence";
+import { createProjectCatalog, serializeProjectCatalog } from "../src/project/projectCatalog";
+import {
+  ProjectPersistenceService,
+  type ProjectPersistenceAdapter
+} from "../src/project/projectPersistence";
+import { buildProjectIndex } from "../src/project/projectScanner";
 import {
   resolveProjectRootFromMarkers,
   stripProjectPrefix,
@@ -151,6 +157,46 @@ function createMemoryAdapter(input: MemoryWorkspaceInput): {
 function isInsideRoot(path: string, root: WorkspaceRoot): boolean {
   const rootPath = root.relativePath ? normalizePath(root.relativePath) : "";
   return !rootPath || path === rootPath || path.startsWith(`${rootPath}/`);
+}
+
+function createMemoryPersistenceService(
+  root: WorkspaceRoot,
+  sourceFiles: readonly string[]
+): ProjectPersistenceService {
+  const projectId = "2c0df18a-8ac2-4b68-84e3-0b6f2c3d6d41";
+  const identity = JSON.stringify({
+    schemaVersion: 1,
+    projectId,
+    createdAt: "2026-09-27T08:00:00.000Z"
+  });
+  const catalog = serializeProjectCatalog(
+    createProjectCatalog(
+      projectId,
+      buildProjectIndex({
+        root,
+        sourceFiles: sourceFiles.map((relativePath) => ({ relativePath })),
+        metadataFiles: [{ relativePath: "package.json", content: "{}" }],
+        scanLimit: 2500,
+        scanTruncated: false
+      }),
+      () => new Date("2026-09-27T08:00:00.000Z")
+    )
+  );
+  const adapter: ProjectPersistenceAdapter = {
+    readProjectIdentity: () => Promise.resolve(identity),
+    writeProjectIdentity: () => Promise.resolve(),
+    writeProjectManifest: () => Promise.resolve(),
+    readProjectCatalog: () => Promise.resolve(catalog),
+    writeProjectCatalog: () => Promise.resolve(),
+    readProjectKnowledge: () => Promise.resolve(undefined),
+    writeProjectKnowledge: () => Promise.resolve(),
+    deleteProjectKnowledge: () => Promise.resolve(),
+    deleteAllProjectKnowledge: () => Promise.resolve(),
+    deleteProjectStorage: () => Promise.resolve()
+  };
+  return new ProjectPersistenceService(adapter, {
+    now: () => new Date("2026-09-27T08:00:00.000Z")
+  });
 }
 
 describe("project intelligence service", () => {
@@ -292,6 +338,30 @@ describe("project intelligence service", () => {
     expect(memory.counts.metadataScans()).toBe(2);
     expect(backend.snapshot?.root.name).toBe("backend");
     expect(backend.snapshot?.sourceFileCount).toBe(1);
+  });
+
+  it("restores a persisted structural catalog before background validation completes", async () => {
+    const memory = createMemoryAdapter({
+      activeFile: "src/app.ts",
+      sourceFiles: ["src/app.ts"]
+    });
+    const persistence = createMemoryPersistenceService(workspaceRoot, [
+      "src/app.ts",
+      "src/app.test.ts",
+      "src/persisted.ts"
+    ]);
+    const service = new ProjectIntelligenceService(memory.adapter, persistence);
+
+    const analysis = await service.analyze(editor("src/app.ts"), {
+      force: false,
+      refreshGit: false
+    });
+
+    expect(analysis.status).toBe("ready");
+    expect(analysis.persistence?.projectId).toBe("2c0df18a-8ac2-4b68-84e3-0b6f2c3d6d41");
+    expect(analysis.snapshot?.codeFiles).toContain("src/persisted.ts");
+    expect(analysis.snapshot?.sourceFileCount).toBe(2);
+    expect(analysis.snapshot?.testFileCount).toBe(1);
   });
 
   it("refreshes Git on save without structurally rescanning", async () => {

@@ -1,6 +1,6 @@
 # CodingSensei Architecture
 
-CodingSensei is a local-first VS Code extension for learning by working inside real projects. Phase 2 builds on the cached project-intelligence foundation with native-first language and framework intelligence.
+CodingSensei is a local-first VS Code extension for learning by working inside real projects. Phase 3 adds persistent project identity and local storage foundations on top of the deterministic project and language intelligence delivered in Phases 1 and 2.
 
 ## Extension Shape
 
@@ -41,6 +41,22 @@ Project intelligence is split into project-root resolution, a structural index a
 Structural analysis runs on first project load, manual refresh, active project changes, and relevant metadata/source file create/delete/change events. Cursor movement, selection changes, diagnostics and ordinary source edits use cached project intelligence without refreshing Git. Switching between sibling projects resolves a different project root and uses a separate cache entry.
 
 Async analysis uses generation checks so stale scans cannot overwrite a newer active-project result. File watcher invalidation is rooted: changes in ignored heavy directories are skipped, and changes in a non-active workspace root invalidate that root without forcing the active Learning Mode view to rescan.
+
+## Persistent Project Identity And Local Storage
+
+Phase 3 assigns each resolved project a stable local identity. The project root may contain a tiny `.codingsensei/project.json` document with a versioned schema, UUID and creation timestamp. It intentionally contains no source contents, absolute paths, credentials or model data. Existing valid identities are reused, including after a project folder is renamed or moved. Invalid identity files are reported as unavailable rather than silently replaced.
+
+The `.codingsensei` directory is local metadata rather than repository content. CodingSensei writes `.codingsensei/.gitignore` with `*`, which causes the directory and its generated files to ignore themselves in Git without changing the user's root `.gitignore` or Git configuration. This self-ignore step is best-effort so a read-only metadata directory does not disable otherwise valid persistence.
+
+Larger persistent intelligence belongs outside the repository. CodingSensei uses the VS Code extension `globalStorageUri` and creates a project-specific directory keyed by the stable project UUID. The first storage record is a small manifest containing the schema version, stable project ID, creation time, most recent open time and last known local root URI. This establishes the storage boundary required for later persistent indexes without putting large generated databases into Git.
+
+Identity/storage initialization is best-effort and independent from deterministic project analysis. If a workspace is read-only, the identity is malformed, or extension storage is unavailable, CodingSensei continues to provide the existing in-memory project intelligence and exposes persistence as unavailable instead of disabling Learning Mode.
+
+Phase 3 also persists a versioned structural catalog in that project-specific storage. The catalog records relative code/config paths, source/test counts, ecosystem/tool/script summaries and bounded project metadata summaries, but not source-file contents. It is available across extension restarts and provides a storage contract for deeper indexes added later.
+
+Once a structural index is live in memory, source-file create/delete events can update its path-based source/test/ecosystem projections directly instead of repeating the bounded workspace file scan. Metadata changes still invalidate and rebuild the structural index because scripts, package evidence and build configuration can change. Deeper symbol/reference indexes will add changed-file invalidation on top of this path-level incremental foundation.
+
+Users can inspect the current project-intelligence status, force a rebuild, or clear stored external intelligence through CodingSensei commands. Clearing stored intelligence deliberately keeps the small stable project identity so the project remains recognizable when intelligence is rebuilt.
 
 ## Project Scanning Boundaries
 

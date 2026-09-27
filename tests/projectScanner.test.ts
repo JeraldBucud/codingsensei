@@ -2,7 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import type { GitProjectState, WorkspaceRoot } from "../src/core/models";
 import { detectFrameworks } from "../src/framework/frameworkIntelligence";
-import { buildProjectIndex, buildProjectSnapshot } from "../src/project/projectScanner";
+import {
+  buildProjectIndex,
+  buildProjectSnapshot,
+  updateProjectIndexSourcePath
+} from "../src/project/projectScanner";
 
 const root: WorkspaceRoot = {
   name: "demo",
@@ -43,6 +47,27 @@ describe("project scanner", () => {
     expect(snapshot.sourceRoots).toEqual(["src"]);
     expect(snapshot.testRoots).toEqual([]);
     expect(snapshot.relatedFiles[0]?.path).toBe("src/app.test.ts");
+  });
+
+  it("updates structural source paths incrementally without a full rescan", () => {
+    const initial = buildProjectIndex({
+      root,
+      scanLimit: 2500,
+      scanTruncated: false,
+      sourceFiles: [{ relativePath: "src/app.ts" }],
+      metadataFiles: [{ relativePath: "package.json", content: "{}" }]
+    });
+
+    const withTest = updateProjectIndexSourcePath(initial, "src/app.test.ts", "create");
+    const withPython = updateProjectIndexSourcePath(withTest, "src/tools.py", "create");
+    const afterDelete = updateProjectIndexSourcePath(withPython, "src/app.ts", "delete");
+
+    expect(withTest.testFiles).toEqual(["src/app.test.ts"]);
+    expect(withPython.ecosystems).toContain("python");
+    expect(afterDelete.codeFiles).toEqual(["src/app.test.ts", "src/tools.py"]);
+    expect(afterDelete.sourceFileCount).toBe(1);
+    expect(afterDelete.testFileCount).toBe(1);
+    expect(afterDelete.manifestFiles).toEqual(["package.json"]);
   });
 
   it("preserves Spring Boot Maven metadata through the project snapshot", () => {

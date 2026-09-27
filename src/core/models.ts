@@ -158,10 +158,18 @@ export interface ProjectMetadataSummary {
   readonly packageNames: readonly string[];
 }
 
+export interface ProjectPersistenceSummary {
+  readonly status: "ready" | "unavailable";
+  readonly projectId?: string;
+  readonly identityCreated?: boolean;
+  readonly message?: string;
+}
+
 export interface ProjectAnalysis {
   readonly status: ProjectAnalysisStatus;
   readonly root?: WorkspaceRoot;
   readonly snapshot?: ProjectSnapshot;
+  readonly persistence?: ProjectPersistenceSummary;
   readonly message?: string;
 }
 

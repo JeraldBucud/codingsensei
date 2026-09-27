@@ -34,7 +34,10 @@
     "onCommand:codingsensei.openLearningMode",
     "onCommand:codingsensei.refreshLearningContext",
     "onCommand:codingsensei.showNextHint",
-    "onCommand:codingsensei.resetHints"
+    "onCommand:codingsensei.resetHints",
+    "onCommand:codingsensei.showProjectIntelligence",
+    "onCommand:codingsensei.rebuildProjectIntelligence",
+    "onCommand:codingsensei.clearProjectIntelligence"
   ],
   "contributes": {
     "commands": [
@@ -60,6 +63,21 @@
         "title": "CodingSensei: Reset Hints",
         "category": "CodingSensei",
         "icon": "$(discard)"
+      },
+      {
+        "command": "codingsensei.showProjectIntelligence",
+        "title": "CodingSensei: Show Project Intelligence",
+        "category": "CodingSensei"
+      },
+      {
+        "command": "codingsensei.rebuildProjectIntelligence",
+        "title": "CodingSensei: Rebuild Project Intelligence",
+        "category": "CodingSensei"
+      },
+      {
+        "command": "codingsensei.clearProjectIntelligence",
+        "title": "CodingSensei: Clear Stored Project Intelligence",
+        "category": "CodingSensei"
       }
     ],
     "viewsContainers": {

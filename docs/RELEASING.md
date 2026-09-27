@@ -9,10 +9,9 @@ While CodingSensei is pre-1.0, minor versions represent meaningful product miles
 - Phase 0: `0.1.0` - Extension Foundation
 - Phase 1: `0.2.0` - Deterministic Project Intelligence
 - Phase 2: `0.3.0` - Language & Framework Intelligence
-- Phase 3: `0.4.0` - Learning Engine
-- Phase 4: `0.5.0` - Embedded Local Intelligence
+- Phase 3: `0.4.0` - Persistent Project Intelligence
 
-This mapping is a roadmap convention. It is not a reason to rush a release merely because a phase name exists.
+Later milestone mappings are maintained in the roadmap as the V1 architecture evolves. This convention is not a reason to rush a release merely because a phase name exists.
 
 ## Version consistency
 

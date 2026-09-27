@@ -18,11 +18,13 @@ import { isPathInsideProject, stripProjectPrefix } from "../project/projectRootR
 import { isIgnoredProjectPath } from "../project/projectScanner";
 import { LearningModeViewProvider } from "../ui/learningModeView";
 import { DebouncedAction } from "../utils/debouncedAction";
+import { IdleWorkQueue } from "../utils/idleWorkQueue";
 
 type RefreshMode = "fast" | "ensure-project" | "refresh-git" | "force-project";
 
 export class CodingSenseiController implements vscode.Disposable {
   private static readonly languageDebounceMs = 350;
+  private static readonly backgroundIndexIdleMs = 1200;
   private readonly disposables: vscode.Disposable[] = [];
   private currentContext: LearningContext | undefined;
   private hintSession: HintSession | undefined;
@@ -38,6 +40,7 @@ export class CodingSenseiController implements vscode.Disposable {
       void this.refreshLanguage(false);
     }
   );
+  private readonly backgroundIndexQueue: IdleWorkQueue<vscode.Uri>;
 
   constructor(
     private readonly contextService: WorkspaceContextService,
@@ -45,7 +48,15 @@ export class CodingSenseiController implements vscode.Disposable {
     private readonly hintEngine: ProgressiveHintEngine,
     private readonly nextStepService: NextStepService,
     private readonly viewProvider: LearningModeViewProvider
-  ) {}
+  ) {
+    this.backgroundIndexQueue = new IdleWorkQueue(
+      CodingSenseiController.backgroundIndexIdleMs,
+      (uri) => uri.toString(),
+      async (uri) => {
+        await this.projectService.indexSourceFile(uri);
+      }
+    );
+  }
 
   register(context: vscode.ExtensionContext): void {
     const projectMetadataWatcher = vscode.workspace.createFileSystemWatcher(
@@ -76,6 +87,15 @@ export class CodingSenseiController implements vscode.Disposable {
       vscode.commands.registerCommand("codingsensei.resetHints", () => {
         this.resetHints();
       }),
+      vscode.commands.registerCommand("codingsensei.showProjectIntelligence", () => {
+        this.showProjectIntelligence();
+      }),
+      vscode.commands.registerCommand("codingsensei.rebuildProjectIntelligence", () => {
+        this.refresh("force-project");
+      }),
+      vscode.commands.registerCommand("codingsensei.clearProjectIntelligence", async () => {
+        await this.clearProjectIntelligence();
+      }),
       vscode.window.onDidChangeActiveTextEditor(() => {
         this.refresh("ensure-project");
       }),
@@ -86,6 +106,7 @@ export class CodingSenseiController implements vscode.Disposable {
       }),
       vscode.workspace.onDidChangeTextDocument((event) => {
         if (isActiveDocument(event.document)) {
+          this.backgroundIndexQueue.defer();
           this.refresh("fast");
           this.scheduleLanguageRefresh();
         }
@@ -104,11 +125,14 @@ export class CodingSenseiController implements vscode.Disposable {
       projectMetadataWatcher.onDidDelete((uri) => {
         void this.invalidateChangedProject(uri);
       }),
+      projectFileWatcher.onDidChange((uri) => {
+        void this.updateChangedSourceFile(uri, "change");
+      }),
       projectFileWatcher.onDidCreate((uri) => {
-        void this.invalidateChangedProject(uri);
+        void this.updateChangedSourceFile(uri, "create");
       }),
       projectFileWatcher.onDidDelete((uri) => {
-        void this.invalidateChangedProject(uri);
+        void this.updateChangedSourceFile(uri, "delete");
       }),
       vscode.languages.onDidChangeDiagnostics((event) => {
         const activeDocumentUri = vscode.window.activeTextEditor?.document.uri;
@@ -127,6 +151,7 @@ export class CodingSenseiController implements vscode.Disposable {
 
   dispose(): void {
     this.debouncedLanguageRefresh.cancel();
+    this.backgroundIndexQueue.dispose();
     for (const disposable of this.disposables) {
       disposable.dispose();
     }
@@ -230,7 +255,7 @@ export class CodingSenseiController implements vscode.Disposable {
     this.publish();
   }
 
-  private async refreshLanguage(force: boolean): Promise<void> {
+  private async refreshLanguage(force: boolean, allowRestore = !force): Promise<void> {
     if (!this.currentContext) {
       return;
     }
@@ -243,6 +268,32 @@ export class CodingSenseiController implements vscode.Disposable {
     }
 
     const contextAtStart = this.currentContext;
+    if (allowRestore) {
+      const restored = await this.projectService.restoreLanguageKnowledge(
+        this.projectAnalysis?.snapshot?.root,
+        document
+      );
+      if (this.currentContext !== contextAtStart) {
+        return;
+      }
+      if (restored) {
+        this.languageAnalysis = this.languageService.prime(document, restored.analysis);
+        this.frameworkDetections = restored.frameworks;
+        this.languageProjectContextKey = createLanguageProjectContextKey({
+          document,
+          snapshot: this.projectAnalysis?.snapshot
+        });
+        this.nextStep = this.nextStepService.choose(
+          this.currentContext,
+          this.projectAnalysis,
+          this.languageAnalysis,
+          this.frameworkDetections
+        );
+        this.publish();
+        return;
+      }
+    }
+
     const analysis = await this.languageService.analyze(document, force);
     if (this.currentContext !== contextAtStart) {
       return;
@@ -250,6 +301,12 @@ export class CodingSenseiController implements vscode.Disposable {
 
     this.languageAnalysis = analysis;
     this.frameworkDetections = this.collectFrameworkDetections(document, analysis);
+    void this.projectService.saveLanguageKnowledge(
+      this.projectAnalysis?.snapshot?.root,
+      document,
+      analysis,
+      this.frameworkDetections
+    );
     this.languageProjectContextKey = createLanguageProjectContextKey({
       document,
       snapshot: this.projectAnalysis?.snapshot
@@ -291,7 +348,32 @@ export class CodingSenseiController implements vscode.Disposable {
       })
     ) {
       this.debouncedLanguageRefresh.cancel();
-      void this.refreshLanguage(true);
+      void this.refreshLanguage(true, true);
+    }
+  }
+
+  private async updateChangedSourceFile(
+    uri: vscode.Uri,
+    change: "create" | "change" | "delete"
+  ): Promise<void> {
+    const relativePath = vscode.workspace.asRelativePath(uri, false);
+    if (isIgnoredProjectPath(relativePath)) {
+      return;
+    }
+
+    const changedRoot = await this.projectService.updateSourceFile(uri, change);
+    if (change !== "delete") {
+      this.backgroundIndexQueue.enqueue(uri);
+    }
+
+    const activeRoot =
+      this.projectAnalysis?.root ?? this.currentContext?.workspace.activeWorkspaceRoot;
+    const activeFile = this.currentContext?.activeEditor?.relativePath;
+    if (
+      changedRoot?.uri === activeRoot?.uri ||
+      (changedRoot && isPathInsideProject(activeFile, changedRoot))
+    ) {
+      this.refresh("fast");
     }
   }
 
@@ -310,6 +392,56 @@ export class CodingSenseiController implements vscode.Disposable {
       (changedRoot && isPathInsideProject(activeFile, changedRoot))
     ) {
       this.refresh("force-project");
+    }
+  }
+
+  private showProjectIntelligence(): void {
+    const analysis = this.projectAnalysis;
+    if (analysis?.status !== "ready" || !analysis.snapshot) {
+      void vscode.window.showInformationMessage(
+        "CodingSensei project intelligence is not ready yet."
+      );
+      return;
+    }
+
+    const persistence = analysis.persistence;
+    const persistenceLabel =
+      persistence?.status === "ready" && persistence.projectId
+        ? `persistent · ${persistence.projectId.slice(0, 8)}`
+        : persistence?.status === "unavailable"
+          ? "persistence unavailable"
+          : "in-memory only";
+    const snapshot = analysis.snapshot;
+    void vscode.window.showInformationMessage(
+      `CodingSensei: ${snapshot.root.name} · ${persistenceLabel} · ${String(snapshot.sourceFileCount)} source · ${String(snapshot.testFileCount)} test`
+    );
+  }
+
+  private async clearProjectIntelligence(): Promise<void> {
+    if (!this.currentContext) {
+      return;
+    }
+
+    const confirmation = await vscode.window.showWarningMessage(
+      "Clear CodingSensei's stored project intelligence? The stable .codingsensei project identity will be kept.",
+      { modal: true },
+      "Clear Stored Intelligence"
+    );
+    if (confirmation !== "Clear Stored Intelligence") {
+      return;
+    }
+
+    const cleared = await this.projectService.clearPersistentData(this.currentContext.activeEditor);
+    if (cleared) {
+      void vscode.window.showInformationMessage(
+        "CodingSensei stored project intelligence was cleared. It will be rebuilt when needed."
+      );
+      this.projectAnalysis = this.projectService.getCached(this.currentContext.activeEditor);
+      this.publish();
+    } else {
+      void vscode.window.showWarningMessage(
+        "CodingSensei could not clear stored project intelligence for the active project."
+      );
     }
   }
 
