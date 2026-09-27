@@ -20,7 +20,7 @@ All three are intended to use the same **Project Intelligence Engine**, so Codin
 
 ## Current Status
 
-The current release is **v0.3.0 — Language & Framework Intelligence**.
+The current release is **v0.4.0 — Persistent Project Intelligence**.
 
 Implemented foundations include:
 
@@ -28,6 +28,10 @@ Implemented foundations include:
 - Learning Mode for the active workspace and editor.
 - Current workspace, file, selection and diagnostics context.
 - Cached deterministic project intelligence.
+- Stable local project identity through `.codingsensei/project.json` without dirtying Git.
+- Persistent structural project catalogs and per-file structural knowledge stored locally outside the repository.
+- Restart restoration with content-hash validation and incremental create/change/delete maintenance.
+- Idle changed-file re-indexing plus inspect/rebuild/clear project-intelligence commands.
 - Nested-project discovery and project-root resolution.
 - JavaScript/TypeScript, Python and Java ecosystem foundations.
 - Package/build-tool and project metadata awareness.
@@ -209,7 +213,7 @@ Launch the extension by opening the repository in VS Code, pressing **F5**, and 
 
 ## Versioning and Releases
 
-CodingSensei follows Semantic Versioning. The current release is `0.3.0`, representing Phase 2 — Language & Framework Intelligence.
+CodingSensei follows Semantic Versioning. The current release is `0.4.0`, representing Phase 3 — Persistent Project Intelligence.
 
 See [CHANGELOG.md](CHANGELOG.md) for milestone history and [docs/RELEASING.md](docs/RELEASING.md) for the release process.
 
