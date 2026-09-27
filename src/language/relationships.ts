@@ -204,14 +204,7 @@ function collectCallRelationships(
         const qualifier = memberMatch[1];
         const target = memberMatch[2];
         if (qualifier && target) {
-          addCallRelationship(
-            source,
-            target,
-            qualifier,
-            ignoredCalls,
-            seen,
-            relationships
-          );
+          addCallRelationship(source, target, qualifier, ignoredCalls, seen, relationships);
         }
       }
 
