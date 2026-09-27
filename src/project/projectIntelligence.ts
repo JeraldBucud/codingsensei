@@ -11,6 +11,10 @@ import { detectFrameworks } from "../framework/frameworkIntelligence";
 import type { FrameworkDetection } from "../framework/models";
 import { LanguageIntelligenceService } from "../language/languageIntelligence";
 import type { LanguageAnalysis, LanguageDocumentInput } from "../language/models";
+import {
+  analyzeArchitecture,
+  type ArchitectureInsights
+} from "./architectureInsights";
 import { readGitState } from "./gitAdapter";
 import { ProjectIndexCache } from "./projectCache";
 import { createProjectCatalog, restoreProjectIndexFromCatalog } from "./projectCatalog";
@@ -451,6 +455,13 @@ export class ProjectIntelligenceService {
     const graph = buildStructuralGraph({ catalog, knowledge });
     this.structuralGraphCache.set(root.uri, graph);
     return graph;
+  }
+
+  async getArchitectureInsights(
+    activeEditor: ActiveEditorContext | undefined
+  ): Promise<ArchitectureInsights | undefined> {
+    const graph = await this.getStructuralGraph(activeEditor);
+    return graph ? analyzeArchitecture(graph) : undefined;
   }
 
   async retrieveStructuralContext(
