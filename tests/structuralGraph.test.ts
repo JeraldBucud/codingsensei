@@ -130,6 +130,56 @@ describe("structural graph", () => {
     expect(graph.edges.filter((edge) => edge.type === "contains")).toHaveLength(2);
   });
 
+
+  it("keeps intra-file calls as symbol-to-symbol call graph edges", () => {
+    const graph = buildStructuralGraph({
+      catalog: {
+        ...catalog,
+        allPaths: ["src/auth.ts", "package.json"],
+        codeFiles: ["src/auth.ts"],
+        sourceFiles: ["src/auth.ts"],
+        testFiles: []
+      },
+      knowledge: [
+        knowledge({
+          file: "src/auth.ts",
+          symbols: [
+            {
+              name: "authenticate",
+              kind: "function",
+              range: { startLine: 0, startCharacter: 0, endLine: 3, endCharacter: 1 },
+              selectionRange: { startLine: 0, startCharacter: 9, endLine: 0, endCharacter: 21 }
+            },
+            {
+              name: "validateUser",
+              kind: "function",
+              range: { startLine: 5, startCharacter: 0, endLine: 7, endCharacter: 1 },
+              selectionRange: { startLine: 5, startCharacter: 9, endLine: 5, endCharacter: 21 }
+            }
+          ],
+          relationships: [
+            {
+              type: "call",
+              target: "validateUser",
+              symbol: "validateUser",
+              sourceSymbol: "authenticate",
+              confidence: "medium",
+              reason: "authenticate calls validateUser."
+            }
+          ]
+        })
+      ]
+    });
+
+    const call = graph.edges.find((edge) => edge.type === "calls");
+    expect(call).toMatchObject({
+      fromFile: "src/auth.ts",
+      toFile: "src/auth.ts"
+    });
+    expect(call?.from).toContain(":authenticate");
+    expect(call?.to).toContain(":validateUser");
+  });
+
   it("does not trust provider-derived cross-file relationships in the project graph", () => {
     const graph = buildStructuralGraph({
       catalog,
