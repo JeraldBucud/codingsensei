@@ -6,8 +6,9 @@ describe("idle work queue", () => {
   it("deduplicates work and waits for the idle delay", async () => {
     vi.useFakeTimers();
     const processed: string[] = [];
-    const queue = new IdleWorkQueue<string>(500, (item) => item, async (item) => {
+    const queue = new IdleWorkQueue<string>(500, (item) => item, (item) => {
       processed.push(item);
+      return Promise.resolve();
     });
 
     queue.enqueue("src/app.ts");
@@ -28,8 +29,9 @@ describe("idle work queue", () => {
   it("defers queued work again when the user becomes active", async () => {
     vi.useFakeTimers();
     const processed: string[] = [];
-    const queue = new IdleWorkQueue<string>(500, (item) => item, async (item) => {
+    const queue = new IdleWorkQueue<string>(500, (item) => item, (item) => {
       processed.push(item);
+      return Promise.resolve();
     });
 
     queue.enqueue("src/app.ts");
@@ -48,8 +50,9 @@ describe("idle work queue", () => {
   it("processes queued items one at a time", async () => {
     vi.useFakeTimers();
     const processed: string[] = [];
-    const queue = new IdleWorkQueue<string>(100, (item) => item, async (item) => {
+    const queue = new IdleWorkQueue<string>(100, (item) => item, (item) => {
       processed.push(item);
+      return Promise.resolve();
     });
 
     queue.enqueue("a");
