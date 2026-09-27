@@ -490,6 +490,69 @@ describe("project intelligence service", () => {
     });
   });
 
+
+  it("keeps deep indexing bounded and reports truncation", async () => {
+    const memory = createMemoryAdapter({
+      activeFile: "src/auth.ts",
+      sourceFiles: ["src/auth.ts", "src/auth.test.ts", "src/other.ts"]
+    });
+    const persisted = createWritablePersistenceService(workspaceRoot, [
+      "src/auth.ts",
+      "src/auth.test.ts",
+      "src/other.ts"
+    ]);
+    const service = new ProjectIntelligenceService(memory.adapter, persisted.service);
+
+    await service.analyze(editor("src/auth.ts"), { force: false, refreshGit: false });
+    const summary = await service.buildDeepProjectIntelligence(editor("src/auth.ts"), {
+      limit: 2
+    });
+
+    expect(summary).toMatchObject({
+      processed: 2,
+      total: 2,
+      indexed: 2,
+      reused: 0,
+      skipped: 0,
+      cancelled: false,
+      truncated: true
+    });
+    expect(persisted.knowledge.size).toBe(2);
+  });
+
+  it("supports cancellation between files while preserving completed knowledge", async () => {
+    const memory = createMemoryAdapter({
+      activeFile: "src/auth.ts",
+      sourceFiles: ["src/auth.ts", "src/auth.test.ts", "src/other.ts"]
+    });
+    const persisted = createWritablePersistenceService(workspaceRoot, [
+      "src/auth.ts",
+      "src/auth.test.ts",
+      "src/other.ts"
+    ]);
+    const service = new ProjectIntelligenceService(memory.adapter, persisted.service);
+    let cancel = false;
+
+    await service.analyze(editor("src/auth.ts"), { force: false, refreshGit: false });
+    const summary = await service.buildDeepProjectIntelligence(editor("src/auth.ts"), {
+      shouldCancel: () => cancel,
+      onProgress: (progress) => {
+        if (progress.processed >= 1) {
+          cancel = true;
+        }
+      }
+    });
+
+    expect(summary).toMatchObject({
+      processed: 1,
+      total: 3,
+      indexed: 1,
+      cancelled: true,
+      truncated: false
+    });
+    expect(persisted.knowledge.size).toBe(1);
+  });
+
   it("refreshes Git on save without structurally rescanning", async () => {
     const { adapter, counts } = createMemoryAdapter({ activeFile: "src/auth.ts" });
     const service = new ProjectIntelligenceService(adapter);
