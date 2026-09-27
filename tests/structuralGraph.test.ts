@@ -130,7 +130,6 @@ describe("structural graph", () => {
     expect(graph.edges.filter((edge) => edge.type === "contains")).toHaveLength(2);
   });
 
-
   it("does not infer a cross-file call from a matching symbol name without dependency evidence", () => {
     const graph = buildStructuralGraph({
       catalog,
