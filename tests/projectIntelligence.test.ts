@@ -459,11 +459,7 @@ describe("project intelligence service", () => {
     await service.analyze(editor("src/auth.ts"), { force: false, refreshGit: false });
     const first = await service.buildDeepProjectIntelligence(editor("src/auth.ts"));
     const graph = await service.getStructuralGraph(editor("src/auth.ts"));
-    const results = await service.retrieveStructuralContext(
-      editor("src/auth.ts"),
-      "other",
-      5
-    );
+    const results = await service.retrieveStructuralContext(editor("src/auth.ts"), "other", 5);
     const second = await service.buildDeepProjectIntelligence(editor("src/auth.ts"));
 
     expect(first).toMatchObject({
