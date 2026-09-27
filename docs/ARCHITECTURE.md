@@ -1,6 +1,6 @@
 # CodingSensei Architecture
 
-CodingSensei is a local-first VS Code extension for learning by working inside real projects. Phase 3 adds persistent project identity and local storage foundations on top of the deterministic project and language intelligence delivered in Phases 1 and 2.
+CodingSensei is a local-first VS Code extension for learning by working inside real projects. Phase 4 builds deterministic structural graphs and retrieval on top of the persistent project identity and local knowledge foundations delivered in Phase 3.
 
 ## Extension Shape
 
@@ -57,6 +57,18 @@ Phase 3 also persists a versioned structural catalog in that project-specific st
 Once a structural index is live in memory, source-file create/delete events can update its path-based source/test/ecosystem projections directly instead of repeating the bounded workspace file scan. Metadata changes still invalidate and rebuild the structural index because scripts, package evidence and build configuration can change. Deeper symbol/reference indexes will add changed-file invalidation on top of this path-level incremental foundation.
 
 Users can inspect the current project-intelligence status, force a rebuild, or clear stored external intelligence through CodingSensei commands. Clearing stored intelligence deliberately keeps the small stable project identity so the project remains recognizable when intelligence is rebuilt.
+
+## Deep Structural Intelligence And Retrieval
+
+Phase 4 introduces a project structural graph derived from persistent local knowledge. File nodes represent known code files and symbol nodes represent persisted declarations. Deterministic edges connect files and symbols through containment, resolved local imports, JSX render relationships, service dependencies, trusted definition/reference relationships and source/test conventions.
+
+Durable graph construction deliberately excludes provider-derived cross-file relationships that may be stale after restart. Those relationships remain useful in live editor analysis, but the persistent structural graph only promotes relationships that CodingSensei can safely reconstruct from local deterministic evidence.
+
+Deep indexing is explicit and bounded. CodingSensei can inspect up to 1,000 code files for the Phase 4 graph checkpoint. Files larger than the existing background source-read bound are skipped, unchanged files reuse their persisted SHA-256-backed knowledge, and raw source contents are not written into the structural graph or project knowledge store.
+
+Structural retrieval is deterministic. It ranks candidate files using direct graph relationships from the active file plus file-path and symbol-name evidence from the user's query. This gives Project Chat and Assist Mode a future evidence-selection layer without requiring an LLM to discover project structure. The model, when introduced later, can reason over retrieved evidence instead of scanning the repository itself.
+
+The initial Phase 4 command surface can build deep project intelligence, report graph coverage, and find relevant project files that open directly in VS Code.
 
 ## Project Scanning Boundaries
 
