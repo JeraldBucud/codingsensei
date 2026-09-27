@@ -259,8 +259,7 @@ function isFrameworkDetections(value: unknown): value is FrameworkDetection[] {
         Array.isArray(item.roles) &&
         item.roles.every(
           (role) =>
-            typeof role === "string" &&
-            roles.has(role as FrameworkDetection["roles"][number])
+            typeof role === "string" && roles.has(role as FrameworkDetection["roles"][number])
         )
     )
   );
