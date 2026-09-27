@@ -19,10 +19,7 @@ describe("persistent project catalog", () => {
   it("round-trips enough structural data to restore a project index", () => {
     const index = buildProjectIndex({
       root,
-      sourceFiles: [
-        { relativePath: "src/app.ts" },
-        { relativePath: "src/app.test.ts" }
-      ],
+      sourceFiles: [{ relativePath: "src/app.ts" }, { relativePath: "src/app.test.ts" }],
       metadataFiles: [
         {
           relativePath: "package.json",
