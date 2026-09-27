@@ -21,9 +21,9 @@ export interface StructuralFileNode {
   readonly kind: "file";
   readonly file: string;
   readonly languageId?: string;
-  readonly frameworks: readonly FrameworkDetection["framework"][];
-  readonly frameworkRoles: readonly FrameworkDetection["roles"][number][];
-  readonly entryPointSignals: readonly string[];
+  readonly frameworks?: readonly FrameworkDetection["framework"][];
+  readonly frameworkRoles?: readonly FrameworkDetection["roles"][number][];
+  readonly entryPointSignals?: readonly string[];
 }
 
 export interface StructuralSymbolNode {
