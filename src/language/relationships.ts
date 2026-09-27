@@ -89,10 +89,7 @@ function collectSymbols(
   if (context.javascriptFamily) {
     checks.push(
       [/\bfunction\s+([A-Za-z_$][\w$]*)\s*\(/, "function"],
-      [
-        /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?\(?[^=]*\)?\s*=>/,
-        "function"
-      ],
+      [/\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?\(?[^=]*\)?\s*=>/, "function"],
       [
         /^\s*(?:(?:public|private|protected|static|async|get|set)\s+)*([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*(?::[^={]+)?\s*\{/,
         "method"
@@ -169,17 +166,12 @@ function collectRelationships(
   }
 }
 
-
 function collectCallRelationships(
   lines: readonly string[],
   symbols: readonly LanguageSymbol[],
   relationships: LanguageRelationship[]
 ): void {
-  const callableKinds = new Set<LanguageSymbol["kind"]>([
-    "function",
-    "method",
-    "constructor"
-  ]);
+  const callableKinds = new Set<LanguageSymbol["kind"]>(["function", "method", "constructor"]);
   const ignoredCalls = new Set([
     "if",
     "for",
