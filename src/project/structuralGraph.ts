@@ -90,6 +90,7 @@ export function buildStructuralGraph(input: {
   const indexedFiles = new Set(knowledgeByFile.keys());
   const symbolOwners = new Map<string, Set<string>>();
   const symbolNodes = new Map<string, StructuralSymbolNode[]>();
+  const directTargetsBySource = collectDirectFileTargets(knowledgeByFile, knownFiles);
 
   for (const record of knowledgeByFile.values()) {
     const file = normalizePath(record.relativePath);
@@ -126,7 +127,8 @@ export function buildStructuralGraph(input: {
         file,
         knownFiles,
         symbolOwners,
-        symbolNodes
+        symbolNodes,
+        directTargetsBySource
       );
     }
   }
@@ -214,7 +216,8 @@ function addRelationshipEdge(
   sourceFile: string,
   knownFiles: ReadonlySet<string>,
   symbolOwners: ReadonlyMap<string, ReadonlySet<string>>,
-  symbolNodes: ReadonlyMap<string, readonly StructuralSymbolNode[]>
+  symbolNodes: ReadonlyMap<string, readonly StructuralSymbolNode[]>,
+  directTargetsBySource: ReadonlyMap<string, ReadonlySet<string>>
 ): void {
   if (relationship.providerDerived) {
     return;
@@ -227,7 +230,8 @@ function addRelationshipEdge(
           relationship.symbol,
           sourceFile,
           symbolOwners,
-          symbolNodes
+          symbolNodes,
+          directTargetsBySource.get(sourceFile) ?? new Set<string>()
         )
       : undefined;
   if (
@@ -290,13 +294,43 @@ function callTargetFile(
   symbol: string,
   sourceFile: string,
   symbolOwners: ReadonlyMap<string, ReadonlySet<string>>,
-  symbolNodes: ReadonlyMap<string, readonly StructuralSymbolNode[]>
+  symbolNodes: ReadonlyMap<string, readonly StructuralSymbolNode[]>,
+  allowedCrossFileTargets: ReadonlySet<string>
 ): string | undefined {
   const localMatches = symbolNodes.get(fileSymbolKey(sourceFile, symbol)) ?? [];
   if (localMatches.length === 1) {
     return sourceFile;
   }
-  return uniqueSymbolOwner(symbol, sourceFile, symbolOwners);
+  const owner = uniqueSymbolOwner(symbol, sourceFile, symbolOwners);
+  return owner && allowedCrossFileTargets.has(owner) ? owner : undefined;
+}
+
+function collectDirectFileTargets(
+  knowledgeByFile: ReadonlyMap<string, PersistentFileKnowledge>,
+  knownFiles: ReadonlySet<string>
+): ReadonlyMap<string, ReadonlySet<string>> {
+  const targets = new Map<string, Set<string>>();
+
+  for (const [sourceFile, record] of knowledgeByFile) {
+    for (const relationship of [...record.imports, ...record.relationships]) {
+      if (
+        relationship.providerDerived ||
+        relationship.type === "call" ||
+        !relationship.targetFile
+      ) {
+        continue;
+      }
+      const targetFile = normalizePath(relationship.targetFile);
+      if (!knownFiles.has(targetFile) || targetFile === sourceFile) {
+        continue;
+      }
+      const sourceTargets = targets.get(sourceFile) ?? new Set<string>();
+      sourceTargets.add(targetFile);
+      targets.set(sourceFile, sourceTargets);
+    }
+  }
+
+  return targets;
 }
 
 function fileSymbolKey(file: string, symbol: string): string {
