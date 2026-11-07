@@ -1,0 +1,31 @@
+name: Temporary managed-agent formatting preview
+
+on:
+  push:
+    branches:
+      - feature/phase-5-project-chat-foundation
+
+permissions:
+  contents: read
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec prettier --write docs/PHASE5_PROJECT_CHAT.md src/chat/localModelStore.ts src/chat/managedRuntimeStore.ts src/chat/managedLlamaCppProvider.ts src/agent/codingSenseiAgent.ts src/commands/registerCommands.ts tests/codingSenseiAgent.test.ts tests/localModelStore.test.ts tests/managedRuntime.test.ts
+      - name: Output formatted files
+        run: |
+          for file in docs/PHASE5_PROJECT_CHAT.md src/chat/localModelStore.ts src/chat/managedRuntimeStore.ts src/chat/managedLlamaCppProvider.ts src/agent/codingSenseiAgent.ts src/commands/registerCommands.ts tests/codingSenseiAgent.test.ts tests/localModelStore.test.ts tests/managedRuntime.test.ts; do
+            echo "===FORMATTED_START:$file==="
+            cat "$file"
+            echo "===FORMATTED_END:$file==="
+          done
