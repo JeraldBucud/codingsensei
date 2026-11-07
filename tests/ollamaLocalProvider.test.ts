@@ -36,7 +36,12 @@ describe("local Ollama provider", () => {
       calls.push({ url: requestUrl(input), init });
       return requestUrl(input).endsWith("/api/tags")
         ? Promise.resolve(Response.json(localModels))
-        : Promise.resolve(Response.json({ done: true, message: { role: "assistant", content: "Read UserService." } }));
+        : Promise.resolve(
+            Response.json({
+              done: true,
+              message: { role: "assistant", content: "Read UserService." }
+            })
+          );
     };
     const provider = new OllamaLocalProvider(fetcher);
     const result = await provider.chat({
@@ -105,7 +110,9 @@ describe("local Ollama provider", () => {
     const badModels = new OllamaLocalProvider(() => Promise.resolve(Response.json({ bad: [] })));
     await expect(badModels.listModels()).rejects.toThrow("invalid installed-model list");
 
-    const unavailable = new OllamaLocalProvider(() => Promise.resolve(new Response("", { status: 500 })));
+    const unavailable = new OllamaLocalProvider(() =>
+      Promise.resolve(new Response("", { status: 500 }))
+    );
     await expect(unavailable.listModels()).rejects.toThrow("HTTP 500");
 
     const empty = new OllamaLocalProvider((input) =>
