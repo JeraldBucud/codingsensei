@@ -20,6 +20,7 @@ export type LanguageRelationshipType =
   | "import"
   | "definition"
   | "reference"
+  | "call"
   | "contains"
   | "renders"
   | "route-handler"
@@ -39,6 +40,8 @@ export interface LanguageRelationship {
   readonly target: string;
   readonly targetFile?: string;
   readonly symbol?: string;
+  readonly sourceSymbol?: string;
+  readonly qualifier?: string;
   readonly providerDerived?: boolean;
   readonly confidence: "high" | "medium" | "low";
   readonly reason: string;

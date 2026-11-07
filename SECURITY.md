@@ -19,3 +19,11 @@ Phase 3 introduces a small versioned `.codingsensei/project.json` identity file 
 ## Local Git Hygiene
 
 CodingSensei treats the small `.codingsensei` project-identity directory as machine-local metadata. It writes a local `.codingsensei/.gitignore` containing `*` so the directory ignores itself and its generated identity file without modifying the repository's root `.gitignore`, Git configuration, remotes, hooks or tracked files. Failure to create this self-ignore file does not disable project persistence.
+
+## Phase 4 Structural Intelligence
+
+Deep Structural Intelligence remains local and deterministic. An explicit deep-index operation may read supported source files from the resolved project root, but individual background reads remain bounded and CodingSensei does not execute source files, package scripts, builds, tests, hooks or remote commands as part of indexing.
+
+The durable structural graph and project-evidence packages contain paths, symbols, line locations, relationship metadata, framework/architecture signals and content-derived hashes; they do not store raw source contents. Deep indexing is bounded to at most 1,000 code files in the current Phase 4 implementation, and oversized source files continue to be skipped by the existing source-read bound.
+
+Call relationships are conservative heuristics rather than security-sensitive execution traces. Cross-file calls are only promoted into the durable graph when CodingSensei has both a unique target symbol and separate direct dependency evidence between the files. Provider-derived cross-file relationships are not promoted into persistent structural intelligence after restart.

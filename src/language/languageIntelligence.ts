@@ -24,7 +24,7 @@ export class DeterministicLanguageAdapter implements LanguageProviderAdapter {
       symbols: bounded.symbols,
       currentSymbol: findContainingSymbol(bounded.symbols, document.cursor),
       imports: deterministic.imports.slice(0, 40),
-      relationships: deterministic.relationships.slice(0, 40),
+      relationships: deterministic.relationships.slice(0, 80),
       entryPointSignals: deterministic.entryPointSignals.slice(0, 10),
       truncated: bounded.truncated
     });

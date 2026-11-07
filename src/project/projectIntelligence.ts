@@ -11,11 +11,15 @@ import { detectFrameworks } from "../framework/frameworkIntelligence";
 import type { FrameworkDetection } from "../framework/models";
 import { LanguageIntelligenceService } from "../language/languageIntelligence";
 import type { LanguageAnalysis, LanguageDocumentInput } from "../language/models";
+import { analyzeArchitecture, type ArchitectureInsights } from "./architectureInsights";
 import { readGitState } from "./gitAdapter";
 import { ProjectIndexCache } from "./projectCache";
-import { restoreProjectIndexFromCatalog } from "./projectCatalog";
+import { buildProjectEvidencePackage, type ProjectEvidencePackage } from "./projectEvidence";
+import { createProjectCatalog, restoreProjectIndexFromCatalog } from "./projectCatalog";
 import { hashContent, restoreLanguageAnalysisFromKnowledge } from "./projectKnowledge";
 import type { ProjectPersistenceService } from "./projectPersistence";
+import { buildStructuralGraph, type StructuralGraph } from "./structuralGraph";
+import { retrieveStructuralContext, type StructuralRetrievalItem } from "./structuralRetrieval";
 import { dirname, extension, fileName, normalizePath } from "./pathUtils";
 import {
   isPathInsideProject,
@@ -39,6 +43,8 @@ import {
 const scanLimit = 2500;
 const metadataReadLimitBytes = 128 * 1024;
 const backgroundSourceReadLimitBytes = 256 * 1024;
+const maxStructuralKnowledgeFiles = 1000;
+const maxDeepIndexFiles = 1000;
 const sourceIncludePattern = "**/*.{ts,tsx,js,jsx,mts,cts,mjs,cjs,py,java}";
 const excludePattern =
   "**/{.git,node_modules,dist,build,out,target,coverage,.next,.venv,venv,__pycache__,vendor,generated}/**";
@@ -68,6 +74,19 @@ export interface RestoredLanguageKnowledge {
   readonly frameworks: readonly FrameworkDetection[];
 }
 
+export interface DeepProjectIndexProgress {
+  readonly processed: number;
+  readonly total: number;
+  readonly indexed: number;
+  readonly reused: number;
+  readonly skipped: number;
+}
+
+export interface DeepProjectIndexSummary extends DeepProjectIndexProgress {
+  readonly cancelled: boolean;
+  readonly truncated: boolean;
+}
+
 export class ProjectIntelligenceService {
   private readonly cache = new ProjectIndexCache();
   private readonly adapter: ProjectWorkspaceAdapter;
@@ -75,6 +94,7 @@ export class ProjectIntelligenceService {
   private gitCache = new Map<string, GitProjectState>();
   private gitGenerations = new Map<string, number>();
   private persistenceState = new Map<string, ProjectPersistenceSummary>();
+  private structuralGraphCache = new Map<string, StructuralGraph>();
   private analyzing = new Set<string>();
 
   constructor(
@@ -155,6 +175,7 @@ export class ProjectIntelligenceService {
       }
 
       if (this.persistenceService) {
+        this.structuralGraphCache.delete(root.uri);
         void this.persistenceService.saveProjectCatalog(root, index);
       }
 
@@ -238,7 +259,140 @@ export class ProjectIntelligenceService {
       metadataPackageNames: cached?.index.metadata.packageNames
     });
 
-    return this.persistenceService.saveFileKnowledge(root, document, analysis, frameworks);
+    const saved = await this.persistenceService.saveFileKnowledge(
+      root,
+      document,
+      analysis,
+      frameworks
+    );
+    if (saved) {
+      this.structuralGraphCache.delete(root.uri);
+    }
+    return saved;
+  }
+
+  async buildDeepProjectIntelligence(
+    activeEditor: ActiveEditorContext | undefined,
+    options: {
+      readonly limit?: number;
+      readonly shouldCancel?: () => boolean;
+      readonly onProgress?: (progress: DeepProjectIndexProgress) => void;
+    } = {}
+  ): Promise<DeepProjectIndexSummary | undefined> {
+    if (!this.persistenceService || !this.adapter.readSourceDocument) {
+      return undefined;
+    }
+
+    const resolution = await this.adapter.resolveProjectRoot(activeEditor);
+    if (!resolution) {
+      return undefined;
+    }
+
+    const root = resolution.projectRoot;
+    await this.ensurePersistence(root);
+
+    let index = this.cache.get(root.uri)?.index;
+    if (!index) {
+      await this.analyze(activeEditor, { force: false, refreshGit: false });
+      index = this.cache.get(root.uri)?.index;
+    }
+    if (!index) {
+      return undefined;
+    }
+
+    const limit = Math.max(1, Math.min(options.limit ?? maxDeepIndexFiles, maxDeepIndexFiles));
+    const paths = index.codeFiles.slice(0, limit);
+    let processed = 0;
+    let indexed = 0;
+    let reused = 0;
+    let skipped = 0;
+    let cancelled = false;
+
+    for (const relativePath of paths) {
+      if (options.shouldCancel?.()) {
+        cancelled = true;
+        break;
+      }
+
+      const source = await this.adapter.readSourceDocument(root, relativePath);
+      if (!source) {
+        skipped += 1;
+        processed += 1;
+        options.onProgress?.({
+          processed,
+          total: paths.length,
+          indexed,
+          reused,
+          skipped
+        });
+        continue;
+      }
+
+      const existing = await this.persistenceService.loadFileKnowledge(root, relativePath);
+      if (
+        existing &&
+        existing.languageId === source.languageId &&
+        existing.contentHash === hashContent(source.text)
+      ) {
+        reused += 1;
+        processed += 1;
+        options.onProgress?.({
+          processed,
+          total: paths.length,
+          indexed,
+          reused,
+          skipped
+        });
+        continue;
+      }
+
+      const document: LanguageDocumentInput = {
+        ...source,
+        relativePath,
+        projectRootUri: root.uri,
+        projectRelativePath: relativePath,
+        knownProjectFiles: index.codeFiles,
+        version: 0
+      };
+      const analysis = await this.backgroundLanguageService.analyze(document, true);
+      const frameworks = detectFrameworks({
+        fileName: document.fileName,
+        relativePath: document.relativePath,
+        languageId: document.languageId,
+        text: document.text,
+        languageAnalysis: analysis,
+        manifestFiles: index.manifestFiles,
+        metadataPackageNames: index.metadata.packageNames
+      });
+
+      if (
+        analysis.status !== "unavailable" &&
+        (await this.persistenceService.saveFileKnowledge(root, document, analysis, frameworks))
+      ) {
+        indexed += 1;
+      } else {
+        skipped += 1;
+      }
+      processed += 1;
+      options.onProgress?.({
+        processed,
+        total: paths.length,
+        indexed,
+        reused,
+        skipped
+      });
+    }
+
+    this.structuralGraphCache.delete(root.uri);
+    return {
+      processed,
+      total: paths.length,
+      indexed,
+      reused,
+      skipped,
+      cancelled,
+      truncated: index.codeFiles.length > paths.length
+    };
   }
 
   async saveLanguageKnowledge(
@@ -250,7 +404,107 @@ export class ProjectIntelligenceService {
     if (!root || !this.persistenceService || analysis.status === "unavailable") {
       return false;
     }
-    return this.persistenceService.saveFileKnowledge(root, document, analysis, frameworks);
+    const saved = await this.persistenceService.saveFileKnowledge(
+      root,
+      document,
+      analysis,
+      frameworks
+    );
+    if (saved) {
+      this.structuralGraphCache.delete(root.uri);
+    }
+    return saved;
+  }
+
+  async getStructuralGraph(
+    activeEditor: ActiveEditorContext | undefined
+  ): Promise<StructuralGraph | undefined> {
+    if (!this.persistenceService) {
+      return undefined;
+    }
+
+    const resolution = await this.adapter.resolveProjectRoot(activeEditor);
+    if (!resolution) {
+      return undefined;
+    }
+
+    const root = resolution.projectRoot;
+    const cachedGraph = this.structuralGraphCache.get(root.uri);
+    if (cachedGraph) {
+      return cachedGraph;
+    }
+
+    await this.ensurePersistence(root);
+    let catalog = await this.persistenceService.loadProjectCatalog(root);
+    if (!catalog) {
+      const cachedIndex = this.cache.get(root.uri)?.index;
+      const state = this.persistenceService.getState(root.uri);
+      if (!cachedIndex || state?.status !== "ready" || !state.projectId) {
+        return undefined;
+      }
+      catalog = createProjectCatalog(state.projectId, cachedIndex);
+    }
+
+    const knowledge = await this.persistenceService.loadProjectKnowledge(
+      root,
+      catalog.codeFiles,
+      maxStructuralKnowledgeFiles
+    );
+    const graph = buildStructuralGraph({ catalog, knowledge });
+    this.structuralGraphCache.set(root.uri, graph);
+    return graph;
+  }
+
+  async getArchitectureInsights(
+    activeEditor: ActiveEditorContext | undefined
+  ): Promise<ArchitectureInsights | undefined> {
+    const graph = await this.getStructuralGraph(activeEditor);
+    return graph ? analyzeArchitecture(graph) : undefined;
+  }
+
+  async buildProjectEvidence(
+    activeEditor: ActiveEditorContext | undefined,
+    query: string,
+    limit = 8
+  ): Promise<ProjectEvidencePackage | undefined> {
+    const resolution = await this.adapter.resolveProjectRoot(activeEditor);
+    if (!resolution) {
+      return undefined;
+    }
+
+    const graph = await this.getStructuralGraph(activeEditor);
+    if (!graph) {
+      return undefined;
+    }
+
+    return buildProjectEvidencePackage({
+      graph,
+      activeFile: resolution.activeFile,
+      query,
+      limit
+    });
+  }
+
+  async retrieveStructuralContext(
+    activeEditor: ActiveEditorContext | undefined,
+    query: string,
+    limit = 8
+  ): Promise<readonly StructuralRetrievalItem[]> {
+    const resolution = await this.adapter.resolveProjectRoot(activeEditor);
+    if (!resolution) {
+      return [];
+    }
+
+    const graph = await this.getStructuralGraph(activeEditor);
+    if (!graph) {
+      return [];
+    }
+
+    return retrieveStructuralContext(graph, {
+      activeFile: resolution.activeFile,
+      query,
+      limit
+    });
   }
 
   async clearPersistentData(activeEditor: ActiveEditorContext | undefined): Promise<boolean> {
@@ -266,6 +520,7 @@ export class ProjectIntelligenceService {
     const cleared = await this.persistenceService.clearProjectData(resolution.projectRoot);
     if (cleared) {
       this.persistenceState.delete(resolution.projectRoot.uri);
+      this.structuralGraphCache.delete(resolution.projectRoot.uri);
     }
     return cleared;
   }
@@ -297,6 +552,7 @@ export class ProjectIntelligenceService {
     const activeFile = resolution.activeFile;
 
     if (change === "change") {
+      this.structuralGraphCache.delete(root.uri);
       if (activeFile && this.persistenceService) {
         void this.persistenceService.deleteFileKnowledge(root, activeFile);
       }
@@ -309,6 +565,7 @@ export class ProjectIntelligenceService {
       return root;
     }
 
+    this.structuralGraphCache.delete(root.uri);
     const generation = this.cache.begin(root);
     const index = updateProjectIndexSourcePath(cached.index, activeFile, change);
     if (change === "delete" && this.persistenceService) {
@@ -329,12 +586,14 @@ export class ProjectIntelligenceService {
     if (this.persistenceService) {
       void this.persistenceService.clearFileKnowledge(resolution.projectRoot);
     }
+    this.structuralGraphCache.delete(resolution.projectRoot.uri);
     this.invalidateRoot(resolution.projectRoot.uri);
     return resolution.projectRoot;
   }
 
   invalidateRoot(rootUri: string): void {
     this.cache.invalidate(rootUri);
+    this.structuralGraphCache.delete(rootUri);
     this.gitCache.delete(rootUri);
     this.gitGenerations.set(rootUri, (this.gitGenerations.get(rootUri) ?? 0) + 1);
   }
@@ -379,6 +638,7 @@ export class ProjectIntelligenceService {
         if (restored && projectMetadataSignature(restored) !== projectMetadataSignature(index)) {
           await this.persistenceService.clearFileKnowledge(root);
         }
+        this.structuralGraphCache.delete(root.uri);
         await this.persistenceService.saveProjectCatalog(root, index);
       }
     } catch {

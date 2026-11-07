@@ -96,6 +96,18 @@ export class CodingSenseiController implements vscode.Disposable {
       vscode.commands.registerCommand("codingsensei.clearProjectIntelligence", async () => {
         await this.clearProjectIntelligence();
       }),
+      vscode.commands.registerCommand("codingsensei.showStructuralIntelligence", async () => {
+        await this.showStructuralIntelligence();
+      }),
+      vscode.commands.registerCommand("codingsensei.showArchitectureInsights", async () => {
+        await this.showArchitectureInsights();
+      }),
+      vscode.commands.registerCommand("codingsensei.findRelevantProjectFiles", async () => {
+        await this.findRelevantProjectFiles();
+      }),
+      vscode.commands.registerCommand("codingsensei.buildStructuralIntelligence", async () => {
+        await this.buildStructuralIntelligence();
+      }),
       vscode.window.onDidChangeActiveTextEditor(() => {
         this.refresh("ensure-project");
       }),
@@ -393,6 +405,195 @@ export class CodingSenseiController implements vscode.Disposable {
     ) {
       this.refresh("force-project");
     }
+  }
+
+  private async showStructuralIntelligence(): Promise<void> {
+    if (!this.currentContext) {
+      return;
+    }
+
+    const graph = await this.projectService.getStructuralGraph(this.currentContext.activeEditor);
+    if (!graph) {
+      void vscode.window.showInformationMessage(
+        "CodingSensei structural intelligence is not available for the active project yet."
+      );
+      return;
+    }
+
+    void vscode.window.showInformationMessage(
+      `CodingSensei structural intelligence: ${String(graph.indexedFileCount)}/${String(
+        graph.totalFileCount
+      )} files indexed · ${String(graph.symbolCount)} symbols · ${String(
+        graph.relationshipCount
+      )} relationships`
+    );
+  }
+
+  private async showArchitectureInsights(): Promise<void> {
+    if (!this.currentContext) {
+      return;
+    }
+
+    const insights = await this.projectService.getArchitectureInsights(
+      this.currentContext.activeEditor
+    );
+    if (!insights) {
+      void vscode.window.showInformationMessage(
+        "CodingSensei architecture insights are not available for the active project yet."
+      );
+      return;
+    }
+
+    const roleSummary = Object.entries(insights.roleCounts)
+      .filter(([, count]) => count > 0)
+      .map(([role, count]) => `${role} ${String(count)}`)
+      .join(" · ");
+
+    const cluster = await vscode.window.showQuickPick(
+      insights.clusters.map((item) => ({
+        label: item.label,
+        description: `${String(item.files.length)} files`,
+        detail: [
+          item.roles.length > 0 ? `roles: ${item.roles.join(", ")}` : "",
+          item.frameworks.length > 0 ? `frameworks: ${item.frameworks.join(", ")}` : ""
+        ]
+          .filter(Boolean)
+          .join(" · "),
+        cluster: item
+      })),
+      {
+        title: `CodingSensei Architecture · ${roleSummary || "structural roles pending"}`,
+        placeHolder: "Select a structural cluster to inspect"
+      }
+    );
+    if (!cluster) {
+      return;
+    }
+
+    const selectedFile = await vscode.window.showQuickPick(cluster.cluster.files, {
+      title: cluster.cluster.label,
+      placeHolder: "Select a file to open"
+    });
+    if (selectedFile) {
+      await this.openProjectFile(selectedFile);
+    }
+  }
+
+  private async findRelevantProjectFiles(): Promise<void> {
+    if (!this.currentContext) {
+      return;
+    }
+
+    const query = await vscode.window.showInputBox({
+      title: "CodingSensei: Find Relevant Project Files",
+      prompt:
+        "Describe what you are looking for. Leave blank to use structural relationships from the active file.",
+      placeHolder: "for example: user service, route handler, tests"
+    });
+    if (query === undefined) {
+      return;
+    }
+
+    const results = await this.projectService.retrieveStructuralContext(
+      this.currentContext.activeEditor,
+      query,
+      12
+    );
+    if (results.length === 0) {
+      void vscode.window.showInformationMessage(
+        "CodingSensei did not find structurally relevant indexed files. " +
+          "Build Deep Project Intelligence to increase coverage."
+      );
+      return;
+    }
+
+    const selected = await vscode.window.showQuickPick(
+      results.map((result) => ({
+        label: result.file,
+        description:
+          result.line === undefined
+            ? `score ${String(result.score)}`
+            : `score ${String(result.score)} · line ${String(result.line + 1)}`,
+        detail: [...result.reasons, ...result.matchedSymbols.map((name) => `symbol: ${name}`)].join(
+          " · "
+        ),
+        file: result.file,
+        line: result.line
+      })),
+      {
+        title: "CodingSensei: Relevant Project Files",
+        placeHolder: "Select a file to open",
+        matchOnDescription: true,
+        matchOnDetail: true
+      }
+    );
+    if (!selected) {
+      return;
+    }
+
+    await this.openProjectFile(selected.file, selected.line);
+  }
+
+  private async openProjectFile(relativePath: string, line?: number): Promise<void> {
+    const root = this.projectAnalysis?.snapshot?.root;
+    if (!root) {
+      return;
+    }
+
+    const uri = vscode.Uri.joinPath(vscode.Uri.parse(root.uri), ...relativePath.split("/"));
+    const document = await vscode.workspace.openTextDocument(uri);
+    const editor = await vscode.window.showTextDocument(document);
+    if (line !== undefined && line >= 0 && line < document.lineCount) {
+      const position = new vscode.Position(line, 0);
+      editor.selection = new vscode.Selection(position, position);
+      editor.revealRange(
+        new vscode.Range(position, position),
+        vscode.TextEditorRevealType.InCenter
+      );
+    }
+  }
+
+  private async buildStructuralIntelligence(): Promise<void> {
+    if (!this.currentContext) {
+      return;
+    }
+
+    let lastPercent = 0;
+    const summary = await vscode.window.withProgress(
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: "CodingSensei: Building deep project intelligence",
+        cancellable: true
+      },
+      async (progress, token) =>
+        this.projectService.buildDeepProjectIntelligence(this.currentContext?.activeEditor, {
+          shouldCancel: () => token.isCancellationRequested,
+          onProgress: (state) => {
+            const percent =
+              state.total === 0 ? 100 : Math.floor((state.processed / state.total) * 100);
+            progress.report({
+              increment: Math.max(0, percent - lastPercent),
+              message: `${String(state.processed)}/${String(state.total)} files`
+            });
+            lastPercent = percent;
+          }
+        })
+    );
+
+    if (!summary) {
+      void vscode.window.showWarningMessage(
+        "CodingSensei could not build deep intelligence for the active project."
+      );
+      return;
+    }
+
+    const suffix = summary.truncated ? " · bounded to the first 1000 code files" : "";
+    const state = summary.cancelled ? "cancelled" : "complete";
+    void vscode.window.showInformationMessage(
+      `CodingSensei deep indexing ${state}: ${String(summary.indexed)} indexed · ${String(
+        summary.reused
+      )} reused · ${String(summary.skipped)} skipped${suffix}`
+    );
   }
 
   private showProjectIntelligence(): void {

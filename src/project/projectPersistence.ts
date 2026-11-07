@@ -21,6 +21,7 @@ import {
   serializePersistentFileKnowledge,
   type PersistentFileKnowledge
 } from "./projectKnowledge";
+import { normalizePath } from "./pathUtils";
 import type { ProjectIndex } from "./projectScanner";
 
 export const projectStorageSchemaVersion = 1 as const;
@@ -176,6 +177,33 @@ export class ProjectPersistenceService {
     } catch {
       return undefined;
     }
+  }
+
+  async loadProjectKnowledge(
+    root: WorkspaceRoot,
+    relativePaths: readonly string[],
+    limit = 1000
+  ): Promise<readonly PersistentFileKnowledge[]> {
+    const boundedPaths = [...new Set(relativePaths.map(normalizePath))].slice(
+      0,
+      Math.max(0, limit)
+    );
+    const records: PersistentFileKnowledge[] = [];
+    const batchSize = 32;
+
+    for (let index = 0; index < boundedPaths.length; index += batchSize) {
+      const batch = boundedPaths.slice(index, index + batchSize);
+      const loaded = await Promise.all(
+        batch.map((relativePath) => this.loadFileKnowledge(root, relativePath))
+      );
+      for (const knowledge of loaded) {
+        if (knowledge) {
+          records.push(knowledge);
+        }
+      }
+    }
+
+    return records;
   }
 
   async deleteFileKnowledge(root: WorkspaceRoot, relativePath: string): Promise<boolean> {

@@ -154,6 +154,50 @@ describe("language intelligence", () => {
     );
   });
 
+  it("detects bounded calls inside known function ranges", () => {
+    const structure = analyzeDeterministicStructure({
+      fileName: "auth.ts",
+      languageId: "typescript",
+      text: "function authenticate() {\n  validateUser();\n  userService.loadUser();\n}\n\nfunction validateUser() { return true; }"
+    });
+
+    expect(structure.relationships).toContainEqual(
+      expect.objectContaining({
+        type: "call",
+        target: "validateUser",
+        sourceSymbol: "authenticate"
+      })
+    );
+    expect(structure.relationships).toContainEqual(
+      expect.objectContaining({
+        type: "call",
+        target: "loadUser",
+        sourceSymbol: "authenticate",
+        qualifier: "userService"
+      })
+    );
+  });
+
+  it("detects JavaScript and TypeScript methods without treating ordinary calls as declarations", () => {
+    const structure = analyzeDeterministicStructure({
+      fileName: "UserService.ts",
+      languageId: "typescript",
+      text: "class UserService {\n  loadUser() {\n    return validateUser();\n  }\n}\nfunction validateUser() { return true; }"
+    });
+
+    expect(structure.symbols).toContainEqual(
+      expect.objectContaining({ name: "loadUser", kind: "method" })
+    );
+    expect(structure.symbols.filter((symbol) => symbol.name === "validateUser")).toHaveLength(1);
+    expect(structure.relationships).toContainEqual(
+      expect.objectContaining({
+        type: "call",
+        target: "validateUser",
+        sourceSymbol: "loadUser"
+      })
+    );
+  });
+
   it("resolves Java service dependencies when one known local candidate exists", async () => {
     const service = new LanguageIntelligenceService();
     const analysis = await service.analyze(
