@@ -41,7 +41,8 @@
     "onCommand:codingsensei.showStructuralIntelligence",
     "onCommand:codingsensei.findRelevantProjectFiles",
     "onCommand:codingsensei.buildStructuralIntelligence",
-    "onCommand:codingsensei.showArchitectureInsights"
+    "onCommand:codingsensei.showArchitectureInsights",
+    "onCommand:codingsensei.askProjectLocal"
   ],
   "contributes": {
     "commands": [
@@ -96,6 +97,11 @@
       {
         "command": "codingsensei.buildStructuralIntelligence",
         "title": "CodingSensei: Build Deep Project Intelligence",
+        "category": "CodingSensei"
+      },
+      {
+        "command": "codingsensei.askProjectLocal",
+        "title": "CodingSensei: Ask Project (Built-in Local Agent)",
         "category": "CodingSensei"
       },
       {

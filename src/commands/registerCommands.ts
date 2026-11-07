@@ -1,5 +1,11 @@
 import * as vscode from "vscode";
 
+import { CodingSenseiAgent, type AgentTask, type SourceExcerpt } from "../agent/codingSenseiAgent";
+import { defaultLocalModel, LocalModelStore } from "../chat/localModelStore";
+import { ManagedLlamaCppProvider } from "../chat/managedLlamaCppProvider";
+import { ManagedRuntimeStore } from "../chat/managedRuntimeStore";
+import type { ProjectEvidencePackage } from "../project/projectEvidence";
+
 import type { HintSession, LearningContext, NextStep, ProjectAnalysis } from "../core/models";
 import type { FrameworkDetection } from "../framework/models";
 import { detectFrameworks } from "../framework/frameworkIntelligence";
@@ -26,6 +32,9 @@ export class CodingSenseiController implements vscode.Disposable {
   private static readonly languageDebounceMs = 350;
   private static readonly backgroundIndexIdleMs = 1200;
   private readonly disposables: vscode.Disposable[] = [];
+  private agent: CodingSenseiAgent | undefined;
+  private modelStore: LocalModelStore | undefined;
+  private runtimeStore: ManagedRuntimeStore | undefined;
   private currentContext: LearningContext | undefined;
   private hintSession: HintSession | undefined;
   private nextStep: NextStep | undefined;
@@ -59,6 +68,9 @@ export class CodingSenseiController implements vscode.Disposable {
   }
 
   register(context: vscode.ExtensionContext): void {
+    this.modelStore = new LocalModelStore(context.globalStorageUri.fsPath);
+    this.runtimeStore = new ManagedRuntimeStore(context.globalStorageUri.fsPath);
+    this.agent = new CodingSenseiAgent(new ManagedLlamaCppProvider(this.runtimeStore));
     const projectMetadataWatcher = vscode.workspace.createFileSystemWatcher(
       "**/{package.json,tsconfig.json,jsconfig.json,pyproject.toml,requirements.txt,setup.py,setup.cfg,pytest.ini,pom.xml,build.gradle,build.gradle.kts,pnpm-lock.yaml,package-lock.json,yarn.lock,gradlew,gradlew.bat,mvnw,mvnw.cmd}"
     );
@@ -107,6 +119,9 @@ export class CodingSenseiController implements vscode.Disposable {
       }),
       vscode.commands.registerCommand("codingsensei.buildStructuralIntelligence", async () => {
         await this.buildStructuralIntelligence();
+      }),
+      vscode.commands.registerCommand("codingsensei.askProjectLocal", async () => {
+        await this.askProjectLocal();
       }),
       vscode.window.onDidChangeActiveTextEditor(() => {
         this.refresh("ensure-project");
@@ -476,6 +491,220 @@ export class CodingSenseiController implements vscode.Disposable {
     });
     if (selectedFile) {
       await this.openProjectFile(selectedFile);
+    }
+  }
+
+  private async readAgentSourceExcerpts(
+    evidence: ProjectEvidencePackage
+  ): Promise<readonly SourceExcerpt[]> {
+    const root = this.projectAnalysis?.snapshot?.root;
+    if (!root) {
+      return [];
+    }
+
+    const excerpts: SourceExcerpt[] = [];
+    for (const item of evidence.files.slice(0, 2)) {
+      const relativeFile = item.file.replaceAll("\\", "/");
+      const segments = relativeFile.split("/");
+      if (
+        relativeFile.startsWith("/") ||
+        /^[A-Za-z]:/.test(relativeFile) ||
+        segments.includes(".") ||
+        segments.includes("..") ||
+        segments.some((segment) => segment.length === 0)
+      ) {
+        continue;
+      }
+      try {
+        const uri = vscode.Uri.joinPath(vscode.Uri.parse(root.uri), ...segments);
+        const info = await vscode.workspace.fs.stat(uri);
+        if (info.size > 16_384 || info.type !== vscode.FileType.File) {
+          continue;
+        }
+        const bytes = await vscode.workspace.fs.readFile(uri);
+        const content = Buffer.from(bytes).toString("utf8");
+        if (content.includes("\0")) {
+          continue;
+        }
+        excerpts.push({ file: item.file, content });
+      } catch {
+        // Files may have changed since indexing; absence is not an error.
+      }
+    }
+    return excerpts;
+  }
+
+  private async setupLocalAi(): Promise<boolean> {
+    const modelStore = this.modelStore;
+    const runtimeStore = this.runtimeStore;
+    if (!modelStore || !runtimeStore) {
+      return false;
+    }
+
+    const modelInstalled = await modelStore.isInstalled();
+    const runtimeInstalled = (await runtimeStore.installedBinary()) !== undefined;
+    if (modelInstalled && runtimeInstalled) {
+      return true;
+    }
+
+    const parts = [
+      !modelInstalled ? "Qwen3 1.7B model (~1.28 GB)" : "",
+      !runtimeInstalled ? "llama.cpp CPU runtime (platform-specific download)" : ""
+    ].filter(Boolean);
+    const approved = await vscode.window.showInformationMessage(
+      `Install ${parts.join(" and ")} for CodingSensei's local AI? These files are downloaded from verified upstream sources into VS Code extension storage. No project code will be uploaded.`,
+      { modal: true },
+      "Install Local AI"
+    );
+    if (approved !== "Install Local AI") {
+      return false;
+    }
+
+    const controller = new AbortController();
+    await vscode.window.withProgress(
+      {
+        title: "CodingSensei: Setting up local AI",
+        location: vscode.ProgressLocation.Notification,
+        cancellable: true
+      },
+      async (progress, token) => {
+        const listener = token.onCancellationRequested(() => {
+          controller.abort();
+        });
+        try {
+          if (!runtimeInstalled) {
+            progress.report({ message: "Downloading verified CPU runtime" });
+            await runtimeStore.install(controller.signal);
+          }
+          if (!modelInstalled) {
+            progress.report({ message: "Downloading verified Qwen3 model" });
+            await modelStore.install(controller.signal, (received, total) => {
+              if (total && total > 0) {
+                progress.report({
+                  message: `Model download ${String(Math.floor((received / total) * 100))}%`
+                });
+              }
+            });
+          }
+        } finally {
+          listener.dispose();
+        }
+      }
+    );
+    return true;
+  }
+
+  private async askProjectLocal(): Promise<void> {
+    if (!vscode.workspace.isTrusted) {
+      void vscode.window.showWarningMessage(
+        "CodingSensei Agent is available only in trusted workspaces."
+      );
+      return;
+    }
+
+    const activeEditor = this.currentContext?.activeEditor;
+    const agent = this.agent;
+    const modelStore = this.modelStore;
+    if (!activeEditor || !agent || !modelStore) {
+      void vscode.window.showInformationMessage(
+        "Open a project file before asking the CodingSensei Agent."
+      );
+      return;
+    }
+
+    const taskChoice = await vscode.window.showQuickPick(
+      [
+        { label: "Reason about project", task: "reason" as const },
+        { label: "Propose a code change", task: "code" as const },
+        { label: "Learn with progressive hints", task: "learn" as const }
+      ],
+      {
+        title: "CodingSensei Agent",
+        placeHolder: "One local model, with task-specific behaviour"
+      }
+    );
+    if (!taskChoice) {
+      return;
+    }
+    const task: AgentTask = taskChoice.task;
+
+    const question = await vscode.window.showInputBox({
+      title: `CodingSensei Agent — ${taskChoice.label}`,
+      prompt: "Describe what you want to understand or change in this project.",
+      placeHolder: "For example: where is user registration handled?",
+      validateInput: (value) =>
+        value.length > 2000 ? "Questions must be 2,000 characters or fewer." : undefined
+    });
+    if (!question?.trim()) {
+      return;
+    }
+
+    try {
+      const evidence = await this.projectService.buildProjectEvidence(activeEditor, question, 8);
+      if (!evidence || evidence.files.length === 0) {
+        void vscode.window.showInformationMessage(
+          "Project evidence is unavailable. Run CodingSensei: Build Deep Project Intelligence first."
+        );
+        return;
+      }
+
+      if (!(await this.setupLocalAi())) {
+        return;
+      }
+
+      const excerpts = task === "code" ? await this.readAgentSourceExcerpts(evidence) : undefined;
+      const controller = new AbortController();
+      const answer = await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: "CodingSensei: Local agent working",
+          cancellable: true
+        },
+        async (_progress, token) => {
+          const listener = token.onCancellationRequested(() => {
+            controller.abort();
+          });
+          try {
+            return await agent.run({
+              task,
+              question,
+              evidence,
+              modelPath: modelStore.modelPath,
+              sourceExcerpts: excerpts,
+              signal: controller.signal
+            });
+          } finally {
+            listener.dispose();
+          }
+        }
+      );
+
+      const lines = [
+        "# CodingSensei — Local Agent",
+        "",
+        `**Model:** ${defaultLocalModel.label}`,
+        `**Task:** ${taskChoice.label}`,
+        "",
+        "## Question",
+        question,
+        "",
+        "## Answer / proposal",
+        answer.text,
+        "",
+        "## Indexed evidence used",
+        ...answer.evidenceFiles.map((file) => `- \`${file}\``),
+        "",
+        answer.truncated ? "_Evidence was bounded to fit the local context budget._" : "",
+        "_AI suggestions are not applied automatically. Verify referenced files and run tests before changing code._"
+      ];
+      const document = await vscode.workspace.openTextDocument({
+        language: "markdown",
+        content: lines.join("\n")
+      });
+      await vscode.window.showTextDocument(document, { preview: false });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown local AI error.";
+      void vscode.window.showErrorMessage(`CodingSensei Agent: ${message}`);
     }
   }
 
