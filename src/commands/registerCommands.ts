@@ -554,7 +554,9 @@ export class CodingSenseiController implements vscode.Disposable {
           cancellable: true
         },
         async (_progress, token) => {
-          const cancellation = token.onCancellationRequested(() => abortController.abort());
+          const cancellation = token.onCancellationRequested(() => {
+            abortController.abort();
+          });
           try {
             return await this.localModel.chat({
               model: selected.label,
