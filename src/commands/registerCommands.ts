@@ -652,8 +652,7 @@ export class CodingSenseiController implements vscode.Disposable {
         return;
       }
 
-      const excerpts =
-        task === "code" ? await this.readAgentSourceExcerpts(evidence) : undefined;
+      const excerpts = task === "code" ? await this.readAgentSourceExcerpts(evidence) : undefined;
       const controller = new AbortController();
       const answer = await vscode.window.withProgress(
         {
