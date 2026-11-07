@@ -68,9 +68,7 @@ describe("project chat prompt", () => {
     expect(() => buildProjectChatPrompt({ question: "   ", evidence })).toThrow(
       "A project chat question is required."
     );
-    expect(() =>
-      buildProjectChatPrompt({ question: "x".repeat(2001), evidence })
-    ).toThrow("2,000");
+    expect(() => buildProjectChatPrompt({ question: "x".repeat(2001), evidence })).toThrow("2,000");
   });
 
   it("bounds file, symbol and relationship counts and drops out-of-scope relationships", () => {
