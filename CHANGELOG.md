@@ -4,6 +4,10 @@ Notable CodingSensei changes are recorded here. CodingSensei follows Semantic Ve
 
 ## [Unreleased]
 
+Future changes will be recorded here.
+
+## [0.5.0] - 2026-11-07
+
 ### Deep Structural Intelligence & Retrieval
 
 - Added a deterministic project structural graph with file and symbol nodes plus import, render, service-dependency, definition/reference, call and source/test edges.
@@ -15,8 +19,6 @@ Notable CodingSensei changes are recorded here. CodingSensei follows Semantic Ve
 - Added bounded deep indexing for up to 1,000 code files, reusing unchanged persistent file knowledge by content hash instead of re-analyzing it.
 - Added commands to build deep project intelligence, inspect graph coverage, inspect architecture clusters and find/open relevant project files.
 - Structural discovery remains local-first and model-free; raw source contents are not persisted in the graph or evidence packages.
-
-Future changes will be recorded here.
 
 ## [0.4.0] - 2026-09-27
 
