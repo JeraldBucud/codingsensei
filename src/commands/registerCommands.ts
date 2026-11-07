@@ -508,6 +508,8 @@ export class CodingSenseiController implements vscode.Disposable {
       const segments = relativeFile.split("/");
       if (
         relativeFile.startsWith("/") ||
+        /^[A-Za-z]:/.test(relativeFile) ||
+        segments.includes(".") ||
         segments.includes("..") ||
         segments.some((segment) => segment.length === 0)
       ) {
@@ -601,7 +603,9 @@ export class CodingSenseiController implements vscode.Disposable {
     }
 
     const activeEditor = this.currentContext?.activeEditor;
-    if (!activeEditor || !this.agent || !this.modelStore) {
+    const agent = this.agent;
+    const modelStore = this.modelStore;
+    if (!activeEditor || !agent || !modelStore) {
       void vscode.window.showInformationMessage(
         "Open a project file before asking the CodingSensei Agent."
       );
@@ -662,11 +666,11 @@ export class CodingSenseiController implements vscode.Disposable {
             controller.abort();
           });
           try {
-            return await this.agent!.run({
+            return await agent.run({
               task,
               question,
               evidence,
-              modelPath: this.modelStore!.modelPath,
+              modelPath: modelStore.modelPath,
               sourceExcerpts: excerpts,
               signal: controller.signal
             });
