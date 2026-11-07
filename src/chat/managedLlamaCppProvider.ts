@@ -88,7 +88,7 @@ async function postChat(
     const response = await fetch(`http://127.0.0.1:${String(port)}/v1/chat/completions`, {
       method: "POST",
       headers: {
-        Authorization: `***
+        Authorization: ["Bearer", apiKey].join(" "),
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
