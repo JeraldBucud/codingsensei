@@ -1,5 +1,8 @@
 import * as vscode from "vscode";
 
+import { OllamaLocalProvider } from "../chat/ollamaLocalProvider";
+import { buildProjectChatPrompt } from "../chat/projectChatPrompt";
+
 import type { HintSession, LearningContext, NextStep, ProjectAnalysis } from "../core/models";
 import type { FrameworkDetection } from "../framework/models";
 import { detectFrameworks } from "../framework/frameworkIntelligence";
@@ -26,6 +29,7 @@ export class CodingSenseiController implements vscode.Disposable {
   private static readonly languageDebounceMs = 350;
   private static readonly backgroundIndexIdleMs = 1200;
   private readonly disposables: vscode.Disposable[] = [];
+  private readonly localModel = new OllamaLocalProvider();
   private currentContext: LearningContext | undefined;
   private hintSession: HintSession | undefined;
   private nextStep: NextStep | undefined;
@@ -107,6 +111,9 @@ export class CodingSenseiController implements vscode.Disposable {
       }),
       vscode.commands.registerCommand("codingsensei.buildStructuralIntelligence", async () => {
         await this.buildStructuralIntelligence();
+      }),
+      vscode.commands.registerCommand("codingsensei.askProjectLocal", async () => {
+        await this.askProjectLocal();
       }),
       vscode.window.onDidChangeActiveTextEditor(() => {
         this.refresh("ensure-project");
@@ -476,6 +483,116 @@ export class CodingSenseiController implements vscode.Disposable {
     });
     if (selectedFile) {
       await this.openProjectFile(selectedFile);
+    }
+  }
+
+  private async askProjectLocal(): Promise<void> {
+    if (!vscode.workspace.isTrusted) {
+      void vscode.window.showWarningMessage(
+        "CodingSensei Project Chat is available only in trusted workspaces."
+      );
+      return;
+    }
+
+    const activeEditor = this.currentContext?.activeEditor;
+    if (!activeEditor) {
+      void vscode.window.showInformationMessage("Open a project file before using Project Chat.");
+      return;
+    }
+
+    const question = await vscode.window.showInputBox({
+      title: "CodingSensei: Ask Project (Local Ollama)",
+      prompt: "Ask about the indexed project. Only bounded structural evidence is sent to local Ollama.",
+      placeHolder: "For example: where is user registration handled?",
+      validateInput: (value) =>
+        value.length > 2000 ? "Questions must be 2,000 characters or fewer." : undefined
+    });
+    if (!question?.trim()) {
+      return;
+    }
+
+    const evidence = await this.projectService.buildProjectEvidence(activeEditor, question, 8);
+    if (!evidence || evidence.files.length === 0) {
+      void vscode.window.showInformationMessage(
+        "Project evidence is unavailable. Run CodingSensei: Build Deep Project Intelligence first."
+      );
+      return;
+    }
+
+    const prompt = buildProjectChatPrompt({ question, evidence });
+    try {
+      const models = await this.localModel.listModels();
+      if (models.length === 0) {
+        void vscode.window.showInformationMessage(
+          "No locally installed Ollama models were found. CodingSensei does not download models automatically."
+        );
+        return;
+      }
+
+      const selected = await vscode.window.showQuickPick(
+        models.map((model) => ({
+          label: model.name,
+          description:
+            model.sizeBytes > 0
+              ? `${(model.sizeBytes / (1024 * 1024 * 1024)).toFixed(1)} GiB on disk`
+              : undefined
+        })),
+        {
+          title: "CodingSensei: Choose an Installed Local Model",
+          placeHolder: "Model runs only when you send a question"
+        }
+      );
+      if (!selected) {
+        return;
+      }
+
+      const abortController = new AbortController();
+      const answer = await vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: `CodingSensei: Asking ${selected.label}`,
+          cancellable: true
+        },
+        async (_progress, token) => {
+          const cancellation = token.onCancellationRequested(() => abortController.abort());
+          try {
+            return await this.localModel.chat({
+              model: selected.label,
+              messages: prompt.messages,
+              keepAlive: "0",
+              signal: abortController.signal
+            });
+          } finally {
+            cancellation.dispose();
+          }
+        }
+      );
+
+      const lines = [
+        "# CodingSensei — Local Project Answer",
+        "",
+        `**Model:** ${selected.label}`,
+        "",
+        "## Question",
+        question,
+        "",
+        "## Answer",
+        answer,
+        "",
+        "## Structural evidence considered",
+        ...prompt.includedFiles.map((file) => `- \`${file}\``),
+        "",
+        prompt.truncated ? "_Evidence was truncated to the local context budget._" : "",
+        "_Structural evidence does not include complete source code. Check the referenced files before applying suggestions._"
+      ];
+      const document = await vscode.workspace.openTextDocument({
+        language: "markdown",
+        content: lines.join("\n")
+      });
+      await vscode.window.showTextDocument(document, { preview: false });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown local-model error.";
+      void vscode.window.showErrorMessage(`CodingSensei Project Chat: ${message}`);
     }
   }
 
