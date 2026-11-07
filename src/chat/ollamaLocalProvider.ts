@@ -5,18 +5,8 @@ const timeoutMs = 180_000;
 const maxModelNameLength = 160;
 const maxAnswerLength = 40_000;
 
-interface OllamaModelResponse {
-  readonly models?: readonly {
-    readonly name?: unknown;
-    readonly size?: unknown;
-    readonly details?: { readonly family?: unknown };
-  }[];
-}
-
-interface OllamaChatResponse {
-  readonly message?: { readonly content?: unknown };
-  readonly done?: unknown;
-  readonly error?: unknown;
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 export class OllamaLocalProvider implements LocalModelProvider {
@@ -24,26 +14,35 @@ export class OllamaLocalProvider implements LocalModelProvider {
 
   async listModels(signal?: AbortSignal): Promise<readonly LocalModelInfo[]> {
     const response = await this.request("/api/tags", { method: "GET" }, signal);
-    const data = (await response.json()) as OllamaModelResponse;
-    if (!Array.isArray(data.models)) {
+    const data = (await response.json()) as unknown;
+    if (!isRecord(data) || !Array.isArray(data.models)) {
       throw new Error("Ollama returned an invalid installed-model list.");
     }
 
-    return data.models.flatMap((model) => {
+    const models: readonly unknown[] = data.models;
+    return models.flatMap((item) => {
+      if (!isRecord(item)) {
+        return [];
+      }
+      const name = item["name"];
+      const size = item["size"];
+      const details = item["details"];
       if (
-        typeof model.name !== "string" ||
-        model.name.length === 0 ||
-        model.name.length > maxModelNameLength ||
-        model.name.includes(":cloud")
+        typeof name !== "string" ||
+        name.length === 0 ||
+        name.length > maxModelNameLength ||
+        name.includes(":cloud")
       ) {
         return [];
       }
-
       return [
         {
-          name: model.name,
-          sizeBytes: typeof model.size === "number" && model.size > 0 ? model.size : 0,
-          family: typeof model.details?.family === "string" ? model.details.family : undefined
+          name,
+          sizeBytes: typeof size === "number" && size > 0 ? size : 0,
+          family:
+            isRecord(details) && typeof details["family"] === "string"
+              ? details["family"]
+              : undefined
         }
       ];
     });
@@ -80,11 +79,16 @@ export class OllamaLocalProvider implements LocalModelProvider {
       },
       request.signal
     );
-    const data = (await response.json()) as OllamaChatResponse;
-    if (typeof data.error === "string") {
-      throw new Error(`Ollama: ${data.error.slice(0, 500)}`);
+    const data = (await response.json()) as unknown;
+    if (!isRecord(data)) {
+      throw new Error("Ollama returned an invalid chat response.");
     }
-    const content = data.message?.content;
+    const apiError = data["error"];
+    if (typeof apiError === "string") {
+      throw new Error(`Ollama: ${apiError.slice(0, 500)}`);
+    }
+    const message = data["message"];
+    const content = isRecord(message) ? message["content"] : undefined;
     if (typeof content !== "string" || content.trim().length === 0) {
       throw new Error("The local model did not return a text answer.");
     }
@@ -100,12 +104,16 @@ export class OllamaLocalProvider implements LocalModelProvider {
     upstreamSignal?: AbortSignal
   ): Promise<Response> {
     const controller = new AbortController();
-    const onAbort = (): void => controller.abort();
+    const onAbort = (): void => {
+      controller.abort();
+    };
     upstreamSignal?.addEventListener("abort", onAbort, { once: true });
     if (upstreamSignal?.aborted) {
       controller.abort();
     }
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    const timeout = setTimeout(() => {
+      controller.abort();
+    }, timeoutMs);
     try {
       const response = await this.fetchImpl(`${ollamaBaseUrl}${path}`, {
         ...options,
