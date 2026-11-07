@@ -15,12 +15,15 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-export function runtimeAssetName(
-  platform: NodeJS.Platform,
-  arch: string
-): string | undefined {
+export function runtimeAssetName(platform: NodeJS.Platform, arch: string): string | undefined {
   const platformName =
-    platform === "win32" ? "win-cpu" : platform === "darwin" ? "macos" : platform === "linux" ? "ubuntu" : undefined;
+    platform === "win32"
+      ? "win-cpu"
+      : platform === "darwin"
+        ? "macos"
+        : platform === "linux"
+          ? "ubuntu"
+          : undefined;
   const architecture = arch === "x64" ? "x64" : arch === "arm64" ? "arm64" : undefined;
   if (!platformName || !architecture) {
     return undefined;
@@ -45,10 +48,7 @@ async function findServerBinary(directory: string, depth = 0): Promise<string | 
   }
   const entries = await readdir(directory, { withFileTypes: true });
   for (const entry of entries) {
-    if (
-      entry.isFile() &&
-      (entry.name === "llama-server" || entry.name === "llama-server.exe")
-    ) {
+    if (entry.isFile() && (entry.name === "llama-server" || entry.name === "llama-server.exe")) {
       return join(directory, entry.name);
     }
   }
@@ -69,16 +69,16 @@ async function getPinnedDigest(assetName: string, signal?: AbortSignal): Promise
     signal
   });
   if (!response.ok) {
-    throw new Error(`Cannot verify the pinned llama.cpp release (HTTP ${String(response.status)}).`);
+    throw new Error(
+      `Cannot verify the pinned llama.cpp release (HTTP ${String(response.status)}).`
+    );
   }
   const payload: unknown = await response.json();
   if (!isRecord(payload) || !Array.isArray(payload["assets"])) {
     throw new Error("The pinned runtime release returned invalid metadata.");
   }
   const assets: readonly unknown[] = payload["assets"];
-  const asset = assets.find(
-    (item) => isRecord(item) && item["name"] === assetName
-  );
+  const asset = assets.find((item) => isRecord(item) && item["name"] === assetName);
   if (!isRecord(asset)) {
     throw new Error("No compatible CPU runtime is published for this platform.");
   }
