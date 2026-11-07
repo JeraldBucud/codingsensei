@@ -9,12 +9,19 @@ const localModels = {
   ]
 };
 
+function requestUrl(input: RequestInfo | URL): string {
+  if (typeof input === "string") {
+    return input;
+  }
+  return input instanceof URL ? input.href : input.url;
+}
+
 describe("local Ollama provider", () => {
   it("lists local installed models and filters cloud models", async () => {
     const paths: string[] = [];
-    const fetcher: typeof fetch = async (input) => {
-      paths.push(String(input));
-      return Response.json(localModels);
+    const fetcher: typeof fetch = (input) => {
+      paths.push(requestUrl(input));
+      return Promise.resolve(Response.json(localModels));
     };
     const provider = new OllamaLocalProvider(fetcher);
     expect(await provider.listModels()).toEqual([
@@ -25,11 +32,11 @@ describe("local Ollama provider", () => {
 
   it("sends bounded message contents only to the fixed localhost endpoint", async () => {
     const calls: { readonly url: string; readonly init?: RequestInit }[] = [];
-    const fetcher: typeof fetch = async (input, init) => {
-      calls.push({ url: String(input), init });
-      return String(input).endsWith("/api/tags")
-        ? Response.json(localModels)
-        : Response.json({ done: true, message: { role: "assistant", content: "Read UserService." } });
+    const fetcher: typeof fetch = (input, init) => {
+      calls.push({ url: requestUrl(input), init });
+      return requestUrl(input).endsWith("/api/tags")
+        ? Promise.resolve(Response.json(localModels))
+        : Promise.resolve(Response.json({ done: true, message: { role: "assistant", content: "Read UserService." } }));
     };
     const provider = new OllamaLocalProvider(fetcher);
     const result = await provider.chat({
@@ -45,7 +52,11 @@ describe("local Ollama provider", () => {
       "http://127.0.0.1:11434/api/tags",
       "http://127.0.0.1:11434/api/chat"
     ]);
-    expect(JSON.parse(String(calls[1]?.init?.body))).toEqual({
+    const body = calls[1]?.init?.body;
+    if (typeof body !== "string") {
+      throw new Error("Expected a JSON POST body.");
+    }
+    expect(JSON.parse(body) as unknown).toEqual({
       model: "qwen3:14b",
       messages: [
         { role: "system", content: "Use only evidence." },
@@ -58,11 +69,11 @@ describe("local Ollama provider", () => {
 
   it("never requests a missing or cloud model", async () => {
     let chatCalls = 0;
-    const fetcher: typeof fetch = async (input) => {
-      if (String(input).endsWith("/api/chat")) {
+    const fetcher: typeof fetch = (input) => {
+      if (requestUrl(input).endsWith("/api/chat")) {
         chatCalls += 1;
       }
-      return Response.json(localModels);
+      return Promise.resolve(Response.json(localModels));
     };
     const provider = new OllamaLocalProvider(fetcher);
     await expect(
@@ -83,9 +94,7 @@ describe("local Ollama provider", () => {
   });
 
   it("reports offline Ollama without attempting a cloud fallback", async () => {
-    const fetcher: typeof fetch = async () => {
-      throw new TypeError("connect ECONNREFUSED");
-    };
+    const fetcher: typeof fetch = () => Promise.reject(new TypeError("connect ECONNREFUSED"));
     const provider = new OllamaLocalProvider(fetcher);
     await expect(provider.listModels()).rejects.toThrow(
       "Could not connect to local Ollama at 127.0.0.1:11434"
@@ -93,16 +102,16 @@ describe("local Ollama provider", () => {
   });
 
   it("rejects invalid model lists, failed requests and empty answers", async () => {
-    const badModels = new OllamaLocalProvider(async () => Response.json({ bad: [] }));
+    const badModels = new OllamaLocalProvider(() => Promise.resolve(Response.json({ bad: [] })));
     await expect(badModels.listModels()).rejects.toThrow("invalid installed-model list");
 
-    const unavailable = new OllamaLocalProvider(async () => new Response("", { status: 500 }));
+    const unavailable = new OllamaLocalProvider(() => Promise.resolve(new Response("", { status: 500 })));
     await expect(unavailable.listModels()).rejects.toThrow("HTTP 500");
 
-    const empty = new OllamaLocalProvider(async (input) =>
-      String(input).endsWith("/api/tags")
-        ? Response.json(localModels)
-        : Response.json({ done: true, message: { content: "" } })
+    const empty = new OllamaLocalProvider((input) =>
+      requestUrl(input).endsWith("/api/tags")
+        ? Promise.resolve(Response.json(localModels))
+        : Promise.resolve(Response.json({ done: true, message: { content: "" } }))
     );
     await expect(
       empty.chat({
