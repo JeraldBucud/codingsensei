@@ -58,13 +58,16 @@ export class CodingSenseiAgent {
       evidence: input.evidence
     });
     const allowed = new Set(prompt.includedFiles);
-    const excerpts = (input.sourceExcerpts ?? [])
+    const selectedExcerpts = (input.sourceExcerpts ?? [])
       .filter((excerpt) => allowed.has(excerpt.file))
-      .slice(0, 2)
-      .map((excerpt) => ({
-        file: excerpt.file,
-        content: excerpt.content.slice(0, 5_000)
-      }));
+      .slice(0, 2);
+    const excerptTruncated =
+      selectedExcerpts.some((excerpt) => excerpt.content.length > 5_000) ||
+      (input.sourceExcerpts?.length ?? 0) > selectedExcerpts.length;
+    const excerpts = selectedExcerpts.map((excerpt) => ({
+      file: excerpt.file,
+      content: excerpt.content.slice(0, 5_000)
+    }));
 
     const userContent = [
       prompt.messages[1]?.content ?? "",
@@ -92,7 +95,7 @@ export class CodingSenseiAgent {
       text,
       task: input.task,
       evidenceFiles: prompt.includedFiles,
-      truncated: prompt.truncated || excerpts.some((excerpt, i) => excerpt.content.length < (input.sourceExcerpts?.[i]?.content.length ?? 0))
+      truncated: prompt.truncated || excerptTruncated
     };
   }
 }
