@@ -63,8 +63,7 @@ export function buildProjectChatPrompt(input: {
     }));
   const relationships = evidence.relationships
     .filter(
-      (relationship) =>
-        selected.has(relationship.fromFile) && selected.has(relationship.toFile)
+      (relationship) => selected.has(relationship.fromFile) && selected.has(relationship.toFile)
     )
     .slice(0, maxRelationships)
     .map((relationship) => ({
