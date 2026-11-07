@@ -19,9 +19,7 @@ const evidence: ProjectEvidencePackage = {
       frameworks: []
     }
   ],
-  symbols: [
-    { file: "src/services/account.ts", line: 4, name: "register", kind: "function" }
-  ],
+  symbols: [{ file: "src/services/account.ts", line: 4, name: "register", kind: "function" }],
   relationships: []
 };
 
