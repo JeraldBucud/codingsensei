@@ -14,7 +14,7 @@ export class OllamaLocalProvider implements LocalModelProvider {
 
   async listModels(signal?: AbortSignal): Promise<readonly LocalModelInfo[]> {
     const response = await this.request("/api/tags", { method: "GET" }, signal);
-    const data = (await response.json()) as unknown;
+    const data: unknown = await response.json();
     if (!isRecord(data) || !Array.isArray(data.models)) {
       throw new Error("Ollama returned an invalid installed-model list.");
     }
@@ -79,7 +79,7 @@ export class OllamaLocalProvider implements LocalModelProvider {
       },
       request.signal
     );
-    const data = (await response.json()) as unknown;
+    const data: unknown = await response.json();
     if (!isRecord(data)) {
       throw new Error("Ollama returned an invalid chat response.");
     }
