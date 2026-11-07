@@ -15,6 +15,23 @@ The first slice is `src/chat/projectChatPrompt.ts`, a pure, tested assembler tha
 
 This is **not** a user-facing chat feature yet. It is the local prompt-construction boundary that later inference implementations must reuse.
 
+## First user-triggered Ollama integration
+
+The command `CodingSensei: Ask Project (Local Ollama)` is now wired as an opt-in, non-streaming prototype:
+
+1. Start local Ollama on the **same machine/environment as the VS Code extension host** (`127.0.0.1:11434`). Remote SSH/dev containers require a separately designed connection approach.
+2. Install or choose an existing local model; CodingSensei only lists installed models through `GET /api/tags` and never downloads one.
+3. Open a trusted workspace and a project file. Build deep project intelligence if required.
+4. Run the command, enter a question and choose the local model.
+5. CodingSensei builds bounded structural evidence and calls `POST /api/chat` with `stream: false` and `keep_alive: "0"`.
+6. The answer opens as a new Markdown editor document. Model output is **not** executed or used to edit files.
+
+This prototype uses the Eco profile by default, requesting model unloading after every answer. Later releases can introduce a configurable Balanced profile and live streaming.
+
+**Privacy boundary:** Questions, file paths, symbols, roles, and relationships are sent to the user's local Ollama endpoint on demand. Source file contents and stable project identity are not included in this initial prompt. The extension never sends project data directly to a cloud provider, but users must still verify their Ollama installation and selected model are configured for local inference.
+
+**Limitations:** Responses are not yet guaranteed to cite real files correctly; users should inspect suggestions before use. Full chat history, clickable verified citations, streaming, provider selection, and optional bounded source excerpts are subsequent Phase 5 work. There is no background LLM execution.
+
 ## Next implementation slices
 
 1. **Provider boundary:** define a cancellable local-model client with explicit user activation. Start with a loopback-only Ollama adapter and model selection. No background requests, cloud fallback or automatic model download.
