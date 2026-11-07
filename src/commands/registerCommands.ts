@@ -502,7 +502,8 @@ export class CodingSenseiController implements vscode.Disposable {
 
     const question = await vscode.window.showInputBox({
       title: "CodingSensei: Ask Project (Local Ollama)",
-      prompt: "Ask about the indexed project. Only bounded structural evidence is sent to local Ollama.",
+      prompt:
+        "Ask about the indexed project. Only bounded structural evidence is sent to local Ollama.",
       placeHolder: "For example: where is user registration handled?",
       validateInput: (value) =>
         value.length > 2000 ? "Questions must be 2,000 characters or fewer." : undefined
