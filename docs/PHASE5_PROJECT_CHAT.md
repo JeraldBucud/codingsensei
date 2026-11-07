@@ -7,7 +7,7 @@ Phase 5 connects the deterministic Project Intelligence Engine to optional, user
 The first slice is `src/chat/projectChatPrompt.ts`, a pure, tested assembler that converts a bounded Phase 4 `ProjectEvidencePackage` into a two-message prompt. It:
 
 - incorporates file paths, verified symbol locations, relationships, roles, and index coverage;
-- uses the project evidence as untrusted *data*, never model instructions;
+- uses the project evidence as untrusted _data_, never model instructions;
 - excludes the stable project ID and source contents;
 - limits question length, selected files and evidence size;
 - tells the model to acknowledge missing evidence and cite exact file/line locations;
