@@ -101,7 +101,7 @@
       },
       {
         "command": "codingsensei.askProjectLocal",
-        "title": "CodingSensei: Ask Project (Local Ollama)",
+        "title": "CodingSensei: Ask Project (Built-in Local Agent)",
         "category": "CodingSensei"
       },
       {
