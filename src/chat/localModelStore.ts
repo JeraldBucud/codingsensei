@@ -70,9 +70,16 @@ export async function downloadVerified(
     const reader = response.body.getReader();
     try {
       for (;;) {
-        const { done, value } = await reader.read();
-        if (done) {
+        const next: unknown = await reader.read();
+        if (typeof next !== "object" || next === null || !("done" in next)) {
+          throw new Error("The download stream returned invalid data.");
+        }
+        if (next.done === true) {
           break;
+        }
+        const value = "value" in next ? next.value : undefined;
+        if (!(value instanceof Uint8Array)) {
+          throw new Error("The download stream returned invalid bytes.");
         }
         received += value.byteLength;
         if (received > input.maxBytes) {
