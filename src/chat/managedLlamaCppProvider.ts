@@ -35,12 +35,17 @@ async function allocatePort(): Promise<number> {
 async function waitForReady(
   port: number,
   child: ChildProcess,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  getStartupError?: () => Error | undefined
 ): Promise<void> {
   const started = Date.now();
   for (;;) {
     if (signal?.aborted) {
       throw new Error("Local AI request cancelled.");
+    }
+    const startupError = getStartupError?.();
+    if (startupError) {
+      throw startupError;
     }
     if (child.exitCode !== null) {
       throw new Error("The managed AI runtime exited while starting.");
@@ -173,10 +178,7 @@ export class ManagedLlamaCppProvider implements LocalModelProvider {
     };
     request.signal?.addEventListener("abort", abort, { once: true });
     try {
-      await waitForReady(port, child, request.signal);
-      if (spawnError) {
-        throw spawnError;
-      }
+      await waitForReady(port, child, request.signal, () => spawnError);
       return await postChat(port, apiKey, request);
     } finally {
       request.signal?.removeEventListener("abort", abort);
