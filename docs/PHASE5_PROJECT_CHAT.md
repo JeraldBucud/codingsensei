@@ -1,49 +1,46 @@
-# Phase 5: Project Chat & Local AI
+# Phase 5 — One Local Agent, One Model
 
-Phase 5 connects the deterministic Project Intelligence Engine to optional, user-controlled local inference. **LLMs must never perform raw repository discovery** in place of the structural index.
+CodingSensei is a **public, local-first VS Code extension**, not a personal Ollama integration. A developer should install the small Core extension, optionally enable local AI, and use it without installing Python, Ollama, LM Studio, signing in, or providing an API key.
 
-## Initial foundation
+## Implemented in draft PR #11
 
-The first slice is `src/chat/projectChatPrompt.ts`, a pure, tested assembler that converts a bounded Phase 4 `ProjectEvidencePackage` into a two-message prompt. It:
+- The existing Project Intelligence Engine ranks indexed project files, symbols and deterministic relationships.
+- `CodingSenseiAgent` uses **one local model** for three explicit tasks: **Reason** (explore/debug), **Code** (review a proposed code change), and **Learn** (progressive hints). The same model is reused for all tasks; there is no supervising LLM.
+- The bounded project chat prompt treats indexed evidence and source excerpts as **untrusted data**. For coding suggestions, the command can read up to two relevant local files (16 KiB maximum per file) and pass at most 5,000 characters from each to the local model.
+- `ManagedRuntimeStore` installs a pinned **llama.cpp CPU runtime** on explicit user approval, using the official GitHub release `b12142`. The release API's SHA-256 digest is required and verified before extraction. Supported CPU targets: Windows x64/arm64, macOS x64/arm64 and Linux x64/arm64.
+- `LocalModelStore` installs a single curated **Qwen3-1.7B Q4_K_M GGUF** from `ggml-org/Qwen3-1.7B-GGUF`, with a pinned SHA-256 checksum. It is approximately 1.28 GB, Apache-2.0 licensed and optional.
+- The managed `llama-server` process is started **only when requested**, bound to `127.0.0.1` with a random API key, and stopped after every answer (Eco mode). CPU inference is the initial compatibility baseline. No telemetry or cloud inference is implemented.
+- The resulting explanation or proposed change appears in an unsaved Markdown editor. CodingSensei **does not execute code, modify files or run tests** on the user's behalf.
 
-- incorporates file paths, verified symbol locations, relationships, roles, and index coverage;
-- uses the project evidence as untrusted _data_, never model instructions;
-- excludes the stable project ID and source contents;
-- limits question length, selected files and evidence size;
-- tells the model to acknowledge missing evidence and cite exact file/line locations;
-- does not call a model, read source code, send network requests, or modify a project.
+## User journey
 
-This is **not** a user-facing chat feature yet. It is the local prompt-construction boundary that later inference implementations must reuse.
+1. Install CodingSensei Core from the VS Code Marketplace when a pre-release package becomes available. Core Project Intelligence continues to work **without** a model.
+2. Open a **trusted** project and run **CodingSensei: Build Deep Project Intelligence**.
+3. Run **CodingSensei: Ask Project (Built-in Local Agent)** and choose Reason, Code or Learn.
+4. The first local AI request asks for consent to download the CPU runtime and approximately 1.28 GB model. Verify that sufficient disk space and memory are available.
+5. Ask a question. CodingSensei provides only the selected evidence to its own local runtime. The runtime stops once the answer is returned.
 
-## First user-triggered Ollama integration
+The first run requires internet access to download **the runtime and model assets only**; subsequent requests do not need network access. GGUF source files, checked-out code and prompts are not uploaded. Local inference remains on the machine running the VS Code extension host.
 
-The command `CodingSensei: Ask Project (Local Ollama)` is now wired as an opt-in, non-streaming prototype:
+## Boundaries and known limitations
 
-1. Start local Ollama on the **same machine/environment as the VS Code extension host** (`127.0.0.1:11434`). Remote SSH/dev containers require a separately designed connection approach.
-2. Install or choose an existing local model; CodingSensei only lists installed models through `GET /api/tags` and never downloads one.
-3. Open a trusted workspace and a project file. Build deep project intelligence if required.
-4. Run the command, enter a question and choose the local model.
-5. CodingSensei builds bounded structural evidence and calls `POST /api/chat` with `stream: false` and `keep_alive: "0"`.
-6. The answer opens as a new Markdown editor document. Model output is **not** executed or used to edit files.
+- The downloaded runtime is a native third-party executable. We must audit its licences, supply chain and archive extraction before Marketplace distribution. `tar` must be available in the extension-host environment. The current installer validates archive entry paths, but an additional unpacking hardening review (including symlinks) is required before shipping.
+- CPU-only inference is the initial baseline. GPU acceleration, low-memory device detection, performance benchmarking, model profiles and caching are future work.
+- The current code action **proposes** changes. It does not apply edits. Model output is not yet verified against actual file contents, and generated file/line references are not yet clickable verified citations.
+- No background indexing or autonomous coding loop is required for local AI inference; the model is idle/unloaded when not requested.
+- A VS Code remote extension host uses the remote machine for inference. Support for local UI-host inference when using Remote SSH/containers requires separate design.
+- Browser VS Code / vscode.dev does not support this native-runtime workflow. It must retain the deterministic Core without AI until a suitable alternative exists.
+- User-space downloads and executable permission behaviour still require hands-on Windows/macOS/Linux testing; macOS Gatekeeper, antivirus, archive layout, executable dependencies and timeouts may need platform-specific fixes.
+- Large model downloads may be slow or fail on limited storage/network connections; the installer must remain opt-in and clearly communicate size, source and licence.
 
-This prototype uses the Eco profile by default, requesting model unloading after every answer. Later releases can introduce a configurable Balanced profile and live streaming.
+## Phase 5 release gates
 
-**Privacy boundary:** Questions, file paths, symbols, roles, and relationships are sent to the user's local Ollama endpoint on demand. Source file contents and stable project identity are not included in this initial prompt. The extension never sends project data directly to a cloud provider, but users must still verify their Ollama installation and selected model are configured for local inference.
+- Build, typecheck, lint, formatting and automated unit tests passing.
+- Windows/macOS/Linux native runtime installation and end-to-end chat smoke tests.
+- Security review for archive extraction, binary provenance, process lifecycle, filesystem boundaries and extension trust.
+- First-run onboarding, disk/memory preflight, cancellation and retry UX.
+- Streamed chat UI, verified clickable citations, bounded reading of source files and user review of code proposals.
+- Benchmark small-model performance and output quality for coding, reasoning and Learning Mode on modest laptops.
+- Marketplace publisher identity, platform-specific packaging, licences and pre-release validation.
 
-**Limitations:** Responses are not yet guaranteed to cite real files correctly; users should inspect suggestions before use. Full chat history, clickable verified citations, streaming, provider selection, and optional bounded source excerpts are subsequent Phase 5 work. There is no background LLM execution.
-
-## Next implementation slices
-
-1. **Provider boundary:** define a cancellable local-model client with explicit user activation. Start with a loopback-only Ollama adapter and model selection. No background requests, cloud fallback or automatic model download.
-2. **Project chat UI:** offer a VS Code chat panel with scopes (project, file, selection). Separate chat mode from Learning and Assist behavior.
-3. **Evidence retrieval:** use Phase 4 ranked project evidence, then optionally load only narrowly selected source excerpts with bounded read limits and user control. Do not persist raw prompts or source excerpts to project knowledge.
-4. **Verifiable answers:** render source references that open existing local paths and lines. Do not make citations from generated text clickable without checking them against the evidence supplied.
-5. **Reliability and privacy:** cancellation, timeout, no-model handling, prompt-injection resistance, zero telemetry, cross-platform path handling, and tests using a fake provider before manual VS Code validation.
-
-## Release gate
-
-Keep this work on a draft PR until it has a functioning local provider and a verifiable chat UI. Phase 5 is not complete merely because the prompt assembler exists. Prior releases remain usable with no AI model installed.
-
-## Hardware and modularity
-
-The deterministic Core must continue to work when Ollama is stopped or the model is unloaded. Future add-on packs can supply Learning, Assist, more languages, or model profiles without forcing extra gigabytes of downloads on every user.
+**Do not merge PR #11 or publish to the VS Code Marketplace until the remaining release gates pass.**
