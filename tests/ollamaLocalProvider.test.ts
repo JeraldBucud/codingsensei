@@ -9,7 +9,7 @@ const localModels = {
   ]
 };
 
-function requestUrl(input: RequestInfo | URL): string {
+function requestUrl(input: Parameters<typeof fetch>[0]): string {
   if (typeof input === "string") {
     return input;
   }
